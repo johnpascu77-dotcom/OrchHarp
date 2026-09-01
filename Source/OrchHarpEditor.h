@@ -4,13 +4,21 @@
 #include <JuceHeader.h>
 #include "OrchHarpProcessor.h"
 
-// Live readout of the 7 pedals: requested diagram as an outline, sounding
-// diagram filled, pedals still in transit highlighted amber.
+// Live readout of the 7 pedals plus direct editing: requested diagram as an
+// outline, sounding diagram as a solid dash, pedals still in transit amber.
+// Click a pedal column at flat / natural / sharp height to set it.
 class PedalDiagramComponent final : public juce::Component
 {
 public:
+    PedalDiagramComponent() { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+
     void setDiagrams (const ohrp::Diagram& sounding, const ohrp::Diagram& requested);
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+
+    // Called with letter 0..6 (C..B) and offset -1 / 0 / +1 when a pedal is
+    // clicked. The editor turns it into a parameter write.
+    std::function<void (int letter, int offset)> onPedalEdit;
 
 private:
     ohrp::Diagram soundingDiagram { ohrp::kAllNatural };

@@ -149,6 +149,32 @@ void PedalDiagramComponent::paint (juce::Graphics& g)
     }
 }
 
+void PedalDiagramComponent::mouseDown (const juce::MouseEvent& e)
+{
+    if (! onPedalEdit)
+        return;
+
+    // Same geometry as paint().
+    auto area = getLocalBounds().toFloat().reduced (6.0f);
+    const float legendW = 40.0f;
+    const float padX = 10.0f;
+    const float x0 = area.getX() + legendW;
+    const float spanW = area.getRight() - padX - x0;
+    const float lineY = area.getY() + area.getHeight() * 0.46f;
+
+    if (spanW <= 0.0f || e.position.x < x0)
+        return;
+
+    const int slot = juce::jlimit (0, 6, static_cast<int> ((e.position.x - x0) / spanW * 7.0f));
+    const int letter = kPedalDrawOrder[static_cast<size_t> (slot)];
+
+    const int offset = e.position.y < lineY - 8.0f ? -1
+                     : e.position.y > lineY + 8.0f ? +1
+                     : 0;
+
+    onPedalEdit (letter, offset);
+}
+
 // ============================ BankCellComponent ============================
 
 void BankCellComponent::setContent (const juce::String& name, juce::Colour colour, bool active)
@@ -247,8 +273,25 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     blackKeyModeAttachment = std::make_unique<ComboBoxAttachment> (params, "blackKeyMode", blackKeyModeBox);
 
     addAndMakeVisible (pedalDiagram);
+    pedalDiagram.onPedalEdit = [this] (int letter, int offset)
+    {
+        static const std::array<const char*, 7> ids { "pedalC", "pedalD", "pedalE", "pedalF", "pedalG", "pedalA", "pedalB" };
+        if (letter < 0 || letter > 6)
+            return;
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (
+                audioProcessor.getParameters().getParameter (ids[static_cast<size_t> (letter)])))
+        {
+            const int index = juce::jlimit (0, 2, offset + 1); // Flat 0 / Natural 1 / Sharp 2
+            if (p->getIndex() != index)
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (index)));
+                p->endChangeGesture();
+            }
+        }
+    };
 
-    pedalsLabel.setText ("Pedal Diagram (C D E F G A B)", juce::dontSendNotification);
+    pedalsLabel.setText ("Pedal Diagram (C D E F G A B)   -   click a column to set flat / natural / sharp", juce::dontSendNotification);
     styleLabel (pedalsLabel, 13.0f, true);
     addAndMakeVisible (pedalsLabel);
 

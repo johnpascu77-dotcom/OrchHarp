@@ -5,8 +5,10 @@ Status: **Phase 1 live** (transformer — pure logic + check tool, processor,
 visual editor with the real harp pedal-diagram readout; live-tested in Bitwig,
 "stunning results"). **Phase 2a built, not yet live-tested** — the two glissando
 engines (contour-follower + trigger-gesture), 11 new params, 40 check assertions
-green, VST3 clean (VS 18 2026 / JUCE `C:/JUCE/JUCE`). **Phase 2b** (pedal-change
-markers → OrchCapture) not started.
+green, VST3 clean (VS 18 2026 / JUCE `C:/JUCE/JUCE`). Contour engine + pedal-run
+recolouring confirmed live 2026-09-01; click-to-edit on the pedal diagram added.
+**Phase 2b** (pedal-change markers → OrchCapture) deprioritised — see §9.
+Usage walkthrough: `OrchHarp_UsageNotes.md`.
 Repo: `C:\AudioDev\Repos\OrchHarp` (git initialised, no remote yet). GitHub
 `johnpascu77-dotcom/OrchHarp` (public, like the rest of the Orch family).
 Plugin code `Ohrp`, VST3, MIDI effect. Consumes the CC49/Harp slot reserved in
@@ -308,13 +310,18 @@ index**, resolved to a pitch at emission time, so a pedal change mid-run
 recolours the tail. Monophonic / Ring per `glissRing`, same as the contour
 engine. Scheduler = a ppq-sorted `pendingGliss` vector drained each block.
 
-### Pedal-change markers for OrchCapture — Phase 2b (not started)
+### Pedal-change markers — Phase 2b, DEPRIORITISED (2026-09-01)
 
-OrchHarp consumes the diagram-change keyswitches, but the score wants them shown.
-On each *sounding*-diagram change, emit a marker (a text meta, or a tagged note
-in a reserved range) that OrchCapture records onto a `<name> Pedals` track →
-Dorico renders the pedal diagrams. Same pattern as OrchCapture's `<name> KS`
-articulation track. Needs a small OrchCapture-side addition to recognise the tag.
+Original idea: on each *sounding*-diagram change emit a marker (text meta, or a
+tagged note in a reserved range) that OrchCapture records onto a `<name> Pedals`
+track → Dorico renders the pedal diagrams. Same pattern as OrchCapture's
+`<name> KS` track; needs an OrchCapture-side addition (it captures note-on/off
+only — no CC, no SysEx).
+
+**User call (2026-09-01):** probably not needed for Dorico. If pedal diagrams are
+wanted in the score they can be derived downstream in music21 from the note
+stream (or a lightweight side file OrchHarp could dump), not carried through
+OrchCapture. Revisit only if that proves painful. Not building it for now.
 
 ---
 
@@ -324,7 +331,7 @@ articulation track. Needs a small OrchCapture-side addition to recognise the tag
 |---|---|
 | **1 — transformer** ✅ | String model, white-key → string, black-key modes, Chromatic bypass, 7 pedal params + bank + family/variant helper, the playability governor, CC49 + black-key (direct + step) triggers, live diagram readout. Pure `OrchHarpPedalLogic` + `OrchHarpPedalLogicCheck`. Factory bank. Built + live-tested 2026-09-01. |
 | **2a — glissando engines** ✅ | Contour-follower gliss + trigger-gesture gliss. Built 2026-09-01, not yet live-tested. |
-| **2b — notation** | Pedal-change markers → OrchCapture `<name> Pedals` track (needs an OrchCapture-side change — no CC/SysEx capture there today). Transport mechanism undecided (reserved-note burst / SysEx / reserved CC pair). |
+| ~~**2b — notation**~~ | Pedal-change markers → OrchCapture. **Deprioritised** — user will derive pedal diagrams downstream in music21 if needed, not through OrchCapture. |
 | **later** | MC 2-CC diagram broadcast; harmonics / près-de-la-table as an articulation hint (probably OrchNoteMapper's job, not here). |
 
 ## 11. Build
