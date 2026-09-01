@@ -1,0 +1,229 @@
+#include "OrchHarpPedalLogic.h"
+
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+namespace
+{
+    int failures = 0;
+
+    void check (bool condition, const std::string& label)
+    {
+        if (condition)
+        {
+            std::cout << "[PASS] " << label << "\n";
+        }
+        else
+        {
+            std::cerr << "[FAIL] " << label << "\n";
+            ++failures;
+        }
+    }
+
+    void checkInt (int got, int expected, const std::string& label)
+    {
+        check (got == expected, label + " (got " + std::to_string (got)
+                                + ", expected " + std::to_string (expected) + ")");
+    }
+
+    std::string pcsToString (const std::vector<int>& pcs)
+    {
+        std::string s = "{";
+        for (size_t i = 0; i < pcs.size(); ++i)
+            s += (i ? "," : "") + std::to_string (pcs[i]);
+        return s + "}";
+    }
+
+    bool sameSet (std::vector<int> a, std::vector<int> b)
+    {
+        std::sort (a.begin(), a.end());
+        std::sort (b.begin(), b.end());
+        return a == b;
+    }
+
+    // Apply governor steps until the diagram reaches target or the step budget
+    // runs out. Returns the number of moves used (or -1 if it never converged).
+    int stepsToConverge (ohrp::Diagram current, const ohrp::Diagram& target, int budget = 32)
+    {
+        ohrp::MoveInfo info;
+        for (int i = 0; i < budget; ++i)
+        {
+            if (ohrp::diagramsEqual (current, target))
+                return i;
+
+            const auto next = ohrp::playablePedalStep (current, target, info);
+
+            for (int letter = 0; letter < 7; ++letter)
+            {
+                if (next[static_cast<size_t> (letter)] != current[static_cast<size_t> (letter)])
+                {
+                    if (ohrp::isLeftFootLetter (letter))  info.lastMovedLeft = letter;
+                    if (ohrp::isRightFootLetter (letter)) info.lastMovedRight = letter;
+                }
+            }
+
+            current = next;
+        }
+        return ohrp::diagramsEqual (current, target) ? budget : -1;
+    }
+
+    int maxMovesPerFoot (const ohrp::Diagram& a, const ohrp::Diagram& b)
+    {
+        // Largest number of pedals changed by a single step within one foot.
+        int left = 0, right = 0;
+        for (int letter = 0; letter < 7; ++letter)
+        {
+            if (a[static_cast<size_t> (letter)] == b[static_cast<size_t> (letter)])
+                continue;
+            if (ohrp::isLeftFootLetter (letter))  ++left;
+            if (ohrp::isRightFootLetter (letter)) ++right;
+        }
+        return std::max (left, right);
+    }
+}
+
+int main()
+{
+    using namespace ohrp;
+
+    std::cout << "OrchHarpPedalLogicCheck\n-----------------------\n";
+
+    // --- String model -----------------------------------------------------
+    {
+        Diagram natural = kAllNatural;
+        checkInt (stringPitchClass (0, natural), 0,  "C natural string = C");
+        checkInt (stringPitchClass (6, natural), 11, "B natural string = B");
+
+        Diagram bFlat = kAllNatural; bFlat[6] = -1;
+        checkInt (stringPitchClass (6, bFlat), 10, "B flat string = Bb");
+
+        Diagram eSharp = kAllNatural; eSharp[2] = +1;
+        checkInt (stringPitchClass (2, eSharp), 5, "E# string = F (enharmonic double)");
+        // E# and F natural now collide on pitch class 5.
+        check (stringPitchClass (2, eSharp) == stringPitchClass (3, eSharp),
+               "E# and F natural collide on the same pitch class");
+    }
+
+    // --- diagramPitchClasses dedupe -------------------------------------
+    {
+        Diagram d = kAllNatural; d[2] = +1; // E# == F
+        const auto pcs = diagramPitchClasses (d);
+        check (pcs.size() == 6, "diagram with one enharmonic double yields 6 distinct pcs");
+        check (std::is_sorted (pcs.begin(), pcs.end()), "diagramPitchClasses is sorted");
+    }
+
+    // --- nearestStringIndex incl. tie ----------------------------------
+    {
+        Diagram cMajor = kAllNatural;
+        checkInt (nearestStringIndex (1, cMajor), 0, "C# nearest string -> C (tie prefers lower letter)");
+        checkInt (nearestStringIndex (6, cMajor), 3, "F# nearest string -> F");
+        checkInt (nearestStringIndex (10, cMajor), 5, "A# nearest string -> A");
+    }
+
+    // --- white-key transform -------------------------------------------
+    {
+        Diagram d = kAllNatural; d[6] = -1; // B flat
+        checkInt (whiteKeyToStringNote (71, d), 70, "white B4 (71) on a Bb diagram -> 70");
+        checkInt (whiteKeyToStringNote (72, d), 72, "white C5 (72) unaffected -> 72");
+
+        Diagram cFlat = kAllNatural; cFlat[0] = -1;
+        checkInt (whiteKeyToStringNote (60, cFlat), 59, "white C4 (60) on a Cb diagram -> 59 (octave below)");
+    }
+
+    // --- nearest-string note for a black key --------------------------
+    {
+        Diagram cMajor = kAllNatural;
+        checkInt (nearestStringNote (61, cMajor), 60, "black C#4 (61), Nearest -> C4 (60)");
+        checkInt (nearestStringNote (66, cMajor), 65, "black F#4 (66), Nearest -> F4 (65)");
+    }
+
+    // --- family / variant / key --------------------------------------
+    {
+        check (sameSet (familyVariantPitchClasses (Family::MajorMinor, 0, 0),
+                        { 0, 2, 4, 5, 7, 9, 11 }), "C major pc set");
+
+        const auto cMajorDiagram = familyVariantKeyToDiagram (Family::MajorMinor, 0, 0);
+        check (diagramsEqual (cMajorDiagram, kAllNatural), "C major diagram is all-natural");
+
+        // A natural minor is also all white notes -> all-natural diagram.
+        const auto aMinorDiagram = familyVariantKeyToDiagram (Family::MajorMinor, 1, 9);
+        check (diagramsEqual (aMinorDiagram, kAllNatural), "A natural minor diagram is all-natural");
+
+        // E major: F#, G#, C#, D# -> those four pedals sharp, others natural.
+        const auto eMajorDiagram = familyVariantKeyToDiagram (Family::MajorMinor, 0, 4);
+        check (eMajorDiagram[0] == 1 && eMajorDiagram[1] == 1   // C#, D#
+                 && eMajorDiagram[3] == 1 && eMajorDiagram[4] == 1 // F#, G#
+                 && eMajorDiagram[2] == 0 && eMajorDiagram[5] == 0 && eMajorDiagram[6] == 0,
+               "E major diagram sharps C D F G, leaves E A B natural");
+        check (sameSet (diagramPitchClasses (eMajorDiagram),
+                        familyVariantPitchClasses (Family::MajorMinor, 0, 4)),
+               "E major diagram sounds exactly the E major pc set");
+
+        // Whole tone on C -> the diagram must sound exactly the whole-tone set.
+        const auto wtDiagram = familyVariantKeyToDiagram (Family::WholeTone, 0, 0);
+        check (sameSet (diagramPitchClasses (wtDiagram),
+                        std::vector<int> { 0, 2, 4, 6, 8, 10 }),
+               "whole-tone diagram sounds only whole-tone pitch classes " + pcsToString (diagramPitchClasses (wtDiagram)));
+
+        // Major pentatonic: fewer than 7 letters, leftovers double a member.
+        const auto pentDiagram = familyVariantKeyToDiagram (Family::Pentatonic, 0, 0);
+        const std::vector<int> pentSet { 0, 2, 4, 7, 9 };
+        bool pentClean = true;
+        for (int pc : diagramPitchClasses (pentDiagram))
+            if (std::find (pentSet.begin(), pentSet.end(), pc) == pentSet.end())
+                pentClean = false;
+        check (pentClean, "C major pentatonic diagram introduces no foreign pitch class "
+                          + pcsToString (diagramPitchClasses (pentDiagram)));
+    }
+
+    // --- playability governor ---------------------------------------
+    {
+        Diagram start = kAllNatural;
+
+        // Target: everything flat. That is 3 left-foot + 4 right-foot changes.
+        Diagram allFlat; allFlat.fill (-1);
+
+        const auto oneStep = playablePedalStep (start, allFlat, MoveInfo {});
+        check (maxMovesPerFoot (start, oneStep) <= 1, "a single governor move changes at most one pedal per foot");
+
+        int totalChanged = 0;
+        for (int letter = 0; letter < 7; ++letter)
+            if (oneStep[static_cast<size_t> (letter)] != start[static_cast<size_t> (letter)])
+                ++totalChanged;
+        check (totalChanged == 2, "first move toward all-flat changes exactly two pedals (one per foot)");
+
+        const int steps = stepsToConverge (start, allFlat);
+        check (steps >= 0, "governor converges to an all-flat target");
+        check (steps == 4, "all-natural -> all-flat takes 4 moves (max(3 left, 4 right))");
+
+        // flat -> sharp is two notches: one move per notch under this build.
+        Diagram cFlat = kAllNatural;  cFlat[0]  = -1;
+        Diagram cSharp = kAllNatural; cSharp[0] = +1;
+        checkInt (stepsToConverge (cFlat, cSharp), 2, "one pedal flat -> sharp takes 2 moves (one notch each)");
+
+        // A new target arriving mid-transition re-aims from the current diagram.
+        Diagram halfway = playablePedalStep (start, allFlat, MoveInfo {});
+        Diagram newTarget = kAllNatural; newTarget[4] = +1; // G sharp only
+        const int reaim = stepsToConverge (halfway, newTarget);
+        check (reaim >= 0 && reaim <= 6, "governor re-aims to a new target from a partial diagram");
+
+        // Locking out a pedal keeps the governor off it for that move.
+        std::array<bool, 7> locked { };
+        locked[2] = true; // lock E
+        Diagram eTarget = kAllNatural; eTarget[2] = +1;
+        const auto lockedStep = playablePedalStep (start, eTarget, MoveInfo {}, locked);
+        check (diagramsEqual (lockedStep, start), "a locked-out pedal does not move this step");
+    }
+
+    std::cout << "-----------------------\n";
+    if (failures == 0)
+    {
+        std::cout << "[PASS] OrchHarpPedalLogicCheck passed.\n";
+        return 0;
+    }
+
+    std::cerr << "[FAIL] " << failures << " failure(s).\n";
+    return 1;
+}

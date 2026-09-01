@@ -1,0 +1,745 @@
+#include "OrchHarpProcessor.h"
+#include "OrchHarpEditor.h"
+
+#include <algorithm>
+
+namespace
+{
+    // Pedal choice index <-> pedal offset. Index 0 Flat / 1 Natural / 2 Sharp.
+    int offsetFromChoiceIndex (int index) noexcept { return juce::jlimit (-1, 1, index - 1); }
+    int choiceIndexFromOffset (int offset) noexcept { return juce::jlimit (0, 2, offset + 1); }
+
+    bool isBlackKey (int noteNumber) noexcept { return ! ohrp::isWhiteKey (noteNumber); }
+
+    // minChangeInterval choice -> beats (4/4 assumed; a time-signature-aware
+    // version is a later refinement - see design doc §6 / §12).
+    const std::array<double, 5> kIntervalBeats { 0.5, 1.0, 2.0, 4.0, 8.0 };
+
+    // Factory bank: the "universal glissando" starting points (design §5).
+    // Authored as target pitch-class sets and fitted onto the 7 pedals by the
+    // same best-fit logic the family helper uses, so a slot always sounds
+    // exactly its set.
+    struct FactorySlot { const char* name; std::vector<int> pcs; juce::uint32 colour; };
+
+    const std::array<FactorySlot, OrchHarpAudioProcessor::kNumBankSlots>& factoryBank()
+    {
+        static const std::array<FactorySlot, 12> slots {{
+            { "C Major",            { 0, 2, 4, 5, 7, 9, 11 },      0xff5fc8f5 },
+            { "A Natural Minor",    { 9, 11, 0, 2, 4, 5, 7 },      0xff6fd0a0 },
+            { "A Melodic Minor",    { 9, 11, 0, 2, 4, 6, 8 },      0xff7fd070 },
+            { "A Harmonic Minor",   { 9, 11, 0, 2, 4, 5, 8 },      0xff9fd060 },
+            { "C Whole Tone",       { 0, 2, 4, 6, 8, 10 },         0xfff5c85f },
+            { "C Major Pentatonic", { 0, 2, 4, 7, 9 },             0xfff5a05f },
+            { "A Minor Pentatonic", { 9, 0, 2, 4, 7 },             0xfff57f7f },
+            { "C Octatonic H-W",    { 0, 1, 3, 4, 6, 7, 9, 10 },   0xffc87ff5 },
+            { "C Octatonic W-H",    { 0, 2, 3, 5, 6, 8, 9, 11 },   0xffa07ff5 },
+            { "C Quartal",          { 0, 5, 10, 3, 8 },            0xff7f9ff5 },
+            { "Hexachord 012678",   { 0, 1, 2, 6, 7, 8 },          0xffc0c0c0 },
+            { "Hexachord 014589",   { 0, 1, 4, 5, 8, 9 },          0xffd0b090 },
+        }};
+        return slots;
+    }
+}
+
+// ============================================================================
+
+OrchHarpAudioProcessor::OrchHarpAudioProcessor()
+    : AudioProcessor (BusesProperties()),
+      parameters (*this, nullptr, "OrchHarpParameters", createParameterLayout())
+{
+    modeParam = parameters.getRawParameterValue ("mode");
+    static const std::array<const char*, 7> pedalIds { "pedalC", "pedalD", "pedalE", "pedalF", "pedalG", "pedalA", "pedalB" };
+    for (int i = 0; i < 7; ++i)
+    {
+        pedalParam[static_cast<size_t> (i)]  = parameters.getRawParameterValue (pedalIds[static_cast<size_t> (i)]);
+        pedalChoice[static_cast<size_t> (i)] = dynamic_cast<juce::AudioParameterChoice*> (parameters.getParameter (pedalIds[static_cast<size_t> (i)]));
+    }
+    bankSlotParam        = parameters.getRawParameterValue ("bankSlot");
+    blackKeyModeParam    = parameters.getRawParameterValue ("blackKeyMode");
+    playabilityParam     = parameters.getRawParameterValue ("playability");
+    minChangeIntervalParam = parameters.getRawParameterValue ("minChangeInterval");
+    changesAtRestsOnlyParam = parameters.getRawParameterValue ("changesAtRestsOnly");
+    avoidRingingParam    = parameters.getRawParameterValue ("avoidRingingPedalChange");
+    ccBankSelectParam    = parameters.getRawParameterValue ("ccBankSelect");
+    ccChannelParam       = parameters.getRawParameterValue ("ccChannel");
+    ctrlDirectLoParam    = parameters.getRawParameterValue ("ctrlDirectLo");
+    ctrlDirectHiParam    = parameters.getRawParameterValue ("ctrlDirectHi");
+    ctrlStepDownParam    = parameters.getRawParameterValue ("ctrlStepDownNote");
+    ctrlStepUpParam      = parameters.getRawParameterValue ("ctrlStepUpNote");
+
+    bankSlotInt = dynamic_cast<juce::AudioParameterInt*> (parameters.getParameter ("bankSlot"));
+
+    resetBankToFactory();
+    resetNoteMap();
+
+    soundingDiagram = readRequestedDiagram();
+    storeReadoutDiagrams (soundingDiagram);
+}
+
+juce::StringArray OrchHarpAudioProcessor::pedalChoiceLabels()
+{
+    return { "Flat", "Natural", "Sharp" };
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Declaration order == Bitwig remote-control page order, 8 per page
+    // (design doc §8).
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "mode", 1 }, "Mode", juce::StringArray { "Pedal", "Chromatic" }, 0));
+
+    const std::array<const char*, 7> pedalIds   { "pedalC", "pedalD", "pedalE", "pedalF", "pedalG", "pedalA", "pedalB" };
+    const std::array<const char*, 7> pedalNames { "Pedal C", "Pedal D", "Pedal E", "Pedal F", "Pedal G", "Pedal A", "Pedal B" };
+    for (int i = 0; i < 7; ++i)
+        params.push_back (std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID { pedalIds[static_cast<size_t> (i)], 1 },
+            pedalNames[static_cast<size_t> (i)],
+            juce::StringArray { "Flat", "Natural", "Sharp" }, 1)); // Natural
+
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "bankSlot", 1 }, "Bank Slot", 0, kNumBankSlots - 1, 0));
+
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "blackKeyMode", 1 }, "Black Key Mode",
+        juce::StringArray { "Control", "Nearest", "Drop", "Nudge" }, 0));
+
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "playability", 1 }, "Playability Governor", true));
+
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "minChangeInterval", 1 }, "Min Change Interval",
+        juce::StringArray { "1/8", "1/4", "1/2", "1 bar", "2 bars" }, 1)); // 1/4
+
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "changesAtRestsOnly", 1 }, "Changes At Rests Only", false));
+
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "avoidRingingPedalChange", 1 }, "Avoid Ringing Pedal Change", false));
+
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ccBankSelect", 1 }, "CC# Bank Select (0 = off)", 0, 127, 49));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ccChannel", 1 }, "CC Channel (0 = any)", 0, 16, 0));
+
+    // Black-key control zone. Defaults: direct-select C-1..B-1 (MIDI 0..11),
+    // step down/up MIDI 12/13 - all below any folded harp playing range
+    // (design doc §12).
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ctrlDirectLo", 1 }, "Ctrl Direct Lo Note", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ctrlDirectHi", 1 }, "Ctrl Direct Hi Note", 0, 127, 11));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ctrlStepDownNote", 1 }, "Ctrl Step Down Note", 0, 127, 12));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ctrlStepUpNote", 1 }, "Ctrl Step Up Note", 0, 127, 13));
+
+    return { params.begin(), params.end() };
+}
+
+// ---- Bank ------------------------------------------------------------------
+
+void OrchHarpAudioProcessor::resetBankToFactory()
+{
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    const auto& factory = factoryBank();
+    for (int i = 0; i < kNumBankSlots; ++i)
+    {
+        bank[static_cast<size_t> (i)].offsets = ohrp::bestFitDiagram (factory[static_cast<size_t> (i)].pcs);
+        bank[static_cast<size_t> (i)].name    = factory[static_cast<size_t> (i)].name;
+        bank[static_cast<size_t> (i)].colour  = factory[static_cast<size_t> (i)].colour;
+    }
+}
+
+OrchHarpAudioProcessor::BankSlot OrchHarpAudioProcessor::getBankSlot (int index) const
+{
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    if (index < 0 || index >= kNumBankSlots)
+        return {};
+    return bank[static_cast<size_t> (index)];
+}
+
+void OrchHarpAudioProcessor::recallBankSlot (int index)
+{
+    if (bankSlotInt != nullptr && index >= 0 && index < kNumBankSlots && bankSlotInt->get() != index)
+        *bankSlotInt = index; // AudioParameterInt::operator= -> setValueNotifyingHost
+}
+
+void OrchHarpAudioProcessor::saveCurrentDiagramToSlot (int index)
+{
+    if (index < 0 || index >= kNumBankSlots)
+        return;
+    const auto requested = readRequestedDiagram();
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    bank[static_cast<size_t> (index)].offsets = requested;
+}
+
+void OrchHarpAudioProcessor::renameBankSlot (int index, const juce::String& name)
+{
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    if (index >= 0 && index < kNumBankSlots)
+        bank[static_cast<size_t> (index)].name = name;
+}
+
+void OrchHarpAudioProcessor::recolourBankSlot (int index, juce::Colour colour)
+{
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    if (index >= 0 && index < kNumBankSlots)
+        bank[static_cast<size_t> (index)].colour = colour.getARGB();
+}
+
+void OrchHarpAudioProcessor::writeFamilyToSlot (ohrp::Family family, int variant, int baseKey, int slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= kNumBankSlots)
+        return;
+    const auto diagram = ohrp::familyVariantKeyToDiagram (family, variant, baseKey);
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    bank[static_cast<size_t> (slotIndex)].offsets = diagram;
+}
+
+juce::ValueTree OrchHarpAudioProcessor::bankToTree() const
+{
+    juce::ValueTree tree ("bank");
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    for (int i = 0; i < kNumBankSlots; ++i)
+    {
+        const auto& slot = bank[static_cast<size_t> (i)];
+        juce::ValueTree child ("slot");
+        child.setProperty ("index", i, nullptr);
+        child.setProperty ("name", slot.name, nullptr);
+        child.setProperty ("colour", (juce::int64) slot.colour, nullptr);
+        for (int p = 0; p < 7; ++p)
+            child.setProperty ("o" + juce::String (p), slot.offsets[static_cast<size_t> (p)], nullptr);
+        tree.appendChild (child, nullptr);
+    }
+    return tree;
+}
+
+void OrchHarpAudioProcessor::bankFromTree (const juce::ValueTree& tree)
+{
+    if (! tree.hasType ("bank"))
+        return;
+
+    const juce::SpinLock::ScopedLockType lock (bankLock);
+    for (int c = 0; c < tree.getNumChildren(); ++c)
+    {
+        const auto child = tree.getChild (c);
+        const int index = (int) child.getProperty ("index", c);
+        if (index < 0 || index >= kNumBankSlots)
+            continue;
+
+        auto& slot = bank[static_cast<size_t> (index)];
+        slot.name   = child.getProperty ("name", slot.name).toString();
+        slot.colour = (juce::uint32) (juce::int64) child.getProperty ("colour", (juce::int64) slot.colour);
+        for (int p = 0; p < 7; ++p)
+            slot.offsets[static_cast<size_t> (p)] =
+                juce::jlimit (-1, 1, (int) child.getProperty ("o" + juce::String (p),
+                                                              slot.offsets[static_cast<size_t> (p)]));
+    }
+}
+
+// ---- Diagram helpers ------------------------------------------------------
+
+ohrp::Diagram OrchHarpAudioProcessor::readRequestedDiagram() const
+{
+    ohrp::Diagram d = ohrp::kAllNatural;
+    for (int i = 0; i < 7; ++i)
+        if (pedalParam[static_cast<size_t> (i)] != nullptr)
+            d[static_cast<size_t> (i)] = offsetFromChoiceIndex (juce::roundToInt (pedalParam[static_cast<size_t> (i)]->load()));
+    return d;
+}
+
+void OrchHarpAudioProcessor::applyDiagramToParams (const ohrp::Diagram& diagram)
+{
+    for (int i = 0; i < 7; ++i)
+    {
+        auto* p = pedalChoice[static_cast<size_t> (i)];
+        const int want = choiceIndexFromOffset (diagram[static_cast<size_t> (i)]);
+        if (p != nullptr && p->getIndex() != want)
+            *p = want;
+    }
+}
+
+double OrchHarpAudioProcessor::minChangeIntervalInBeats() const
+{
+    const int idx = minChangeIntervalParam != nullptr
+        ? juce::jlimit (0, 4, juce::roundToInt (minChangeIntervalParam->load())) : 1;
+    return kIntervalBeats[static_cast<size_t> (idx)];
+}
+
+ohrp::Diagram OrchHarpAudioProcessor::getSoundingDiagramForUi() const
+{
+    ohrp::Diagram d = ohrp::kAllNatural;
+    for (int i = 0; i < 7; ++i)
+        d[static_cast<size_t> (i)] = juce::jlimit (-1, 1, soundingUi[static_cast<size_t> (i)].load());
+    return d;
+}
+
+ohrp::Diagram OrchHarpAudioProcessor::getRequestedDiagramForUi() const
+{
+    ohrp::Diagram d = ohrp::kAllNatural;
+    for (int i = 0; i < 7; ++i)
+        d[static_cast<size_t> (i)] = juce::jlimit (-1, 1, requestedUi[static_cast<size_t> (i)].load());
+    return d;
+}
+
+void OrchHarpAudioProcessor::storeReadoutDiagrams (const ohrp::Diagram& requested)
+{
+    int transit = 0;
+    for (int i = 0; i < 7; ++i)
+    {
+        soundingUi[static_cast<size_t> (i)].store (soundingDiagram[static_cast<size_t> (i)]);
+        requestedUi[static_cast<size_t> (i)].store (requested[static_cast<size_t> (i)]);
+        if (soundingDiagram[static_cast<size_t> (i)] != requested[static_cast<size_t> (i)])
+            ++transit;
+    }
+    movesInTransit.store (transit);
+}
+
+// ---- Lifecycle ----------------------------------------------------------
+
+void OrchHarpAudioProcessor::prepareToPlay (double newSampleRate, int)
+{
+    sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    resetNoteMap();
+    integratedPpq = 0.0;
+    wasPlaying = false;
+    lastMovePpq = -1.0e12;
+    lastNudgePpq = -1.0e12;
+    lastAppliedBankSlot = -1;
+    soundingDiagram = readRequestedDiagram();
+    moveInfo = {};
+    storeReadoutDiagrams (soundingDiagram);
+}
+
+void OrchHarpAudioProcessor::releaseResources() {}
+
+bool OrchHarpAudioProcessor::isBusesLayoutSupported (const BusesLayout&) const { return true; }
+
+void OrchHarpAudioProcessor::resetNoteMap()
+{
+    activeNotes.clear();
+    lastStringSoundPpq.fill (-1.0e12);
+}
+
+// ---- Governor ---------------------------------------------------------
+
+void OrchHarpAudioProcessor::snapSoundingToRequested (const ohrp::Diagram& requested)
+{
+    soundingDiagram = requested;
+    moveInfo = {};
+}
+
+void OrchHarpAudioProcessor::runGovernor (const ohrp::Diagram& requested, double blockPpq)
+{
+    const bool governed = playabilityParam == nullptr || playabilityParam->load() >= 0.5f;
+
+    if (! governed)
+    {
+        soundingDiagram = requested;
+        return;
+    }
+
+    if (ohrp::diagramsEqual (soundingDiagram, requested))
+        return;
+
+    // Hold every move until the track is silent, when asked.
+    const bool restsOnly = changesAtRestsOnlyParam != nullptr && changesAtRestsOnlyParam->load() >= 0.5f;
+    if (restsOnly && ! activeNotes.empty())
+        return;
+
+    const double intervalBeats = minChangeIntervalInBeats();
+    if (blockPpq - lastMovePpq < intervalBeats)
+        return;
+
+    // Buzz avoidance: skip a pedal whose string sounded within the last interval.
+    std::array<bool, 7> lockedOut { };
+    if (avoidRingingParam != nullptr && avoidRingingParam->load() >= 0.5f)
+        for (int i = 0; i < 7; ++i)
+            if (blockPpq - lastStringSoundPpq[static_cast<size_t> (i)] < intervalBeats)
+                lockedOut[static_cast<size_t> (i)] = true;
+
+    const auto next = ohrp::playablePedalStep (soundingDiagram, requested, moveInfo, lockedOut);
+    if (ohrp::diagramsEqual (next, soundingDiagram))
+        return; // nothing moved (all disagreeing pedals locked out) - try again later
+
+    for (int i = 0; i < 7; ++i)
+    {
+        if (next[static_cast<size_t> (i)] != soundingDiagram[static_cast<size_t> (i)])
+        {
+            if (ohrp::isLeftFootLetter (i))  moveInfo.lastMovedLeft = i;
+            if (ohrp::isRightFootLetter (i)) moveInfo.lastMovedRight = i;
+        }
+    }
+
+    soundingDiagram = next;
+    lastMovePpq = blockPpq;
+}
+
+// ---- Control CC / notes ----------------------------------------------
+
+void OrchHarpAudioProcessor::handleControlCc (const juce::MidiMessage& message)
+{
+    const int ccNum = ccBankSelectParam != nullptr
+        ? juce::jlimit (0, 127, juce::roundToInt (ccBankSelectParam->load())) : 49;
+    if (ccNum == 0 || message.getControllerNumber() != ccNum)
+        return;
+
+    const int value = juce::jlimit (0, 127, message.getControllerValue());
+    const int slot = juce::roundToInt (value / 127.0f * (kNumBankSlots - 1));
+    recallBankSlot (juce::jlimit (0, kNumBankSlots - 1, slot));
+    lastCc.store (ccNum);
+}
+
+bool OrchHarpAudioProcessor::tryConsumeControlNote (int noteNumber)
+{
+    const auto readNote = [] (std::atomic<float>* p, int fallback)
+    {
+        return p != nullptr ? juce::jlimit (0, 127, juce::roundToInt (p->load())) : fallback;
+    };
+
+    const int directLo = readNote (ctrlDirectLoParam, 0);
+    const int directHi = readNote (ctrlDirectHiParam, 11);
+    const int stepDown = readNote (ctrlStepDownParam, 12);
+    const int stepUp   = readNote (ctrlStepUpParam, 13);
+
+    const int lo = juce::jmin (directLo, directHi);
+    const int hi = juce::jmax (directLo, directHi);
+
+    const int current = bankSlotInt != nullptr ? bankSlotInt->get() : 0;
+
+    if (noteNumber >= lo && noteNumber <= hi)
+    {
+        recallBankSlot (juce::jlimit (0, kNumBankSlots - 1, noteNumber - lo));
+        return true;
+    }
+    if (noteNumber == stepDown)
+    {
+        recallBankSlot (juce::jlimit (0, kNumBankSlots - 1, current - 1));
+        return true;
+    }
+    if (noteNumber == stepUp)
+    {
+        recallBankSlot (juce::jlimit (0, kNumBankSlots - 1, current + 1));
+        return true;
+    }
+
+    // In Control mode any other black key is still consumed (routed to the
+    // control zone, no-op here) rather than sounded - design §4.
+    return true;
+}
+
+void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int samplePosition,
+                                           juce::MidiBuffer& output, double blockPpq)
+{
+    const int channel = juce::jlimit (1, 16, message.getChannel());
+    const int inputNote = juce::jlimit (0, 127, message.getNoteNumber());
+    const auto velocity = message.getVelocity();
+
+    const auto track = [&] (int outNote)
+    {
+        if (activeNotes.size() >= 2048)
+            activeNotes.erase (activeNotes.begin());
+        activeNotes.push_back ({ channel, inputNote, outNote });
+    };
+
+    const auto emit = [&] (int outNote, int letter, int action)
+    {
+        track (outNote);
+        if (outNote == inputNote)
+            output.addEvent (message, samplePosition);
+        else
+            output.addEvent (juce::MidiMessage::noteOn (channel, outNote, velocity), samplePosition);
+
+        if (letter >= 0 && letter < 7)
+            lastStringSoundPpq[static_cast<size_t> (letter)] = blockPpq;
+
+        lastInputNote.store (inputNote);
+        lastOutputNote.store (outNote);
+        lastOutputLetter.store (letter);
+        lastAction.store (action);
+    };
+
+    const auto drop = [&] (int action)
+    {
+        track (-1);
+        lastInputNote.store (inputNote);
+        lastOutputNote.store (-1);
+        lastOutputLetter.store (-1);
+        lastAction.store (action);
+    };
+
+    const auto blackMode = static_cast<ohrp::BlackKeyMode> (
+        blackKeyModeParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (blackKeyModeParam->load())) : 0);
+
+    // White key -> its string, same octave.
+    if (ohrp::isWhiteKey (inputNote))
+    {
+        const int letter = ohrp::letterForWhiteKey (inputNote);
+        const int out = ohrp::whiteKeyToStringNote (inputNote, soundingDiagram);
+
+        // Same-string collision: a live note already sounds this pitch on this
+        // channel -> drop the later one (a section harpist has one string).
+        for (const auto& n : activeNotes)
+            if (n.channel == channel && n.outputNote == out)
+            {
+                drop (3);
+                return;
+            }
+
+        emit (out, letter, 1);
+        return;
+    }
+
+    // Black key.
+    switch (blackMode)
+    {
+        case ohrp::BlackKeyMode::Control:
+            tryConsumeControlNote (inputNote);
+            drop (4);
+            return;
+
+        case ohrp::BlackKeyMode::Drop:
+            drop (3);
+            return;
+
+        case ohrp::BlackKeyMode::Nudge:
+        {
+            // Bend the nearest pedal one notch toward the note, rate-limited by
+            // the governor interval, then sound it on the nearest string.
+            const int letter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
+            const int wantPc = ohrp::mod12 (inputNote);
+            const int havePc = ohrp::stringPitchClass (letter, soundingDiagram);
+            if (wantPc != havePc && blockPpq - lastNudgePpq >= minChangeIntervalInBeats())
+            {
+                auto* p = pedalChoice[static_cast<size_t> (letter)];
+                if (p != nullptr)
+                {
+                    const int base = ohrp::kLetterBaseSemitone[static_cast<size_t> (letter)];
+                    const int cur = ohrp::mod12 (base);
+                    const int up = ohrp::mod12 (wantPc - cur + 6) - 6; // signed shortest direction
+                    const int deltaOffset = up > 0 ? 1 : -1;
+                    const int newIndex = juce::jlimit (0, 2, p->getIndex() + deltaOffset);
+                    if (newIndex != p->getIndex())
+                        *p = newIndex;
+                }
+                lastNudgePpq = blockPpq;
+            }
+            const int out = ohrp::nearestStringNote (inputNote, soundingDiagram);
+            const int outLetter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
+            emit (out, outLetter, 2);
+            return;
+        }
+
+        case ohrp::BlackKeyMode::Nearest:
+        default:
+        {
+            const int out = ohrp::nearestStringNote (inputNote, soundingDiagram);
+            const int letter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
+            for (const auto& n : activeNotes)
+                if (n.channel == channel && n.outputNote == out)
+                {
+                    drop (3);
+                    return;
+                }
+            emit (out, letter, 2);
+            return;
+        }
+    }
+}
+
+void OrchHarpAudioProcessor::handleNoteOff (const juce::MidiMessage& message, int samplePosition, juce::MidiBuffer& output)
+{
+    const int channel = juce::jlimit (1, 16, message.getChannel());
+    const int inputNote = juce::jlimit (0, 127, message.getNoteNumber());
+
+    const auto it = std::find_if (activeNotes.begin(), activeNotes.end(),
+        [&] (const TrackedNote& n) { return n.channel == channel && n.inputNote == inputNote; });
+
+    if (it == activeNotes.end())
+    {
+        output.addEvent (message, samplePosition); // untracked - pass through
+        return;
+    }
+
+    const int outputNote = it->outputNote;
+    activeNotes.erase (it);
+
+    if (outputNote < 0)
+        return; // matching note-on was dropped / consumed
+
+    if (outputNote == inputNote)
+        output.addEvent (message, samplePosition);
+    else
+        output.addEvent (juce::MidiMessage::noteOff (channel, outputNote, message.getVelocity()), samplePosition);
+}
+
+// ---- processBlock ----------------------------------------------------
+
+void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    buffer.clear();
+
+    const int numSamples = buffer.getNumSamples();
+
+    bool playing = false;
+    bool havePpq = false;
+    double bpm = 120.0;
+    double blockStartPpq = integratedPpq;
+
+    if (auto* transport = getPlayHead())
+    {
+        if (const auto pos = transport->getPosition())
+        {
+            playing = pos->getIsPlaying();
+            if (const auto hostBpm = pos->getBpm(); hostBpm && *hostBpm > 0.0)
+                bpm = *hostBpm;
+            if (const auto ppq = pos->getPpqPosition())
+            {
+                blockStartPpq = *ppq;
+                havePpq = true;
+            }
+        }
+    }
+
+    const double ppqPerSample = sampleRate > 0.0 ? (bpm / 60.0) / sampleRate : 0.0;
+    integratedPpq = blockStartPpq + numSamples * ppqPerSample;
+
+    // Chromatic = total bypass: every message passes through untouched.
+    const bool chromatic = modeParam != nullptr && modeParam->load() >= 0.5f;
+    if (chromatic)
+    {
+        if (! activeNotes.empty())
+            resetNoteMap();
+        wasPlaying = playing;
+        // Keep the readout honest while bypassed.
+        storeReadoutDiagrams (readRequestedDiagram());
+        return;
+    }
+
+    // Bank-slot recall: writing the slot's 7 offsets onto the pedal params.
+    const int slot = bankSlotParam != nullptr
+        ? juce::jlimit (0, kNumBankSlots - 1, juce::roundToInt (bankSlotParam->load())) : 0;
+    if (slot != lastAppliedBankSlot)
+    {
+        if (const juce::SpinLock::ScopedTryLockType tryLock (bankLock); tryLock.isLocked())
+        {
+            applyDiagramToParams (bank[static_cast<size_t> (slot)].offsets);
+            lastAppliedBankSlot = slot;
+        }
+    }
+
+    const ohrp::Diagram requested = readRequestedDiagram();
+
+    // Pedals are set during the rest before playing: snap on the transport edge.
+    if (! playing)
+        snapSoundingToRequested (requested);
+    else if (! wasPlaying)
+        snapSoundingToRequested (requested);
+    else
+        runGovernor (requested, blockStartPpq);
+
+    wasPlaying = playing;
+
+    juce::MidiBuffer output;
+
+    for (const auto metadata : midiMessages)
+    {
+        const auto message = metadata.getMessage();
+        const int samplePosition = metadata.samplePosition;
+
+        if (message.isController())
+        {
+            const int ccChannel = ccChannelParam != nullptr
+                ? juce::jlimit (0, 16, juce::roundToInt (ccChannelParam->load())) : 0;
+            if (ccChannel == 0 || message.getChannel() == ccChannel)
+                handleControlCc (message);
+
+            output.addEvent (message, samplePosition); // control CCs pass through
+            continue;
+        }
+
+        if (message.isNoteOn())
+        {
+            handleNoteOn (message, samplePosition, output, blockStartPpq);
+            continue;
+        }
+
+        if (message.isNoteOff())
+        {
+            handleNoteOff (message, samplePosition, output);
+            continue;
+        }
+
+        if (message.isAllNotesOff() || message.isAllSoundOff())
+        {
+            resetNoteMap();
+            output.addEvent (message, samplePosition);
+            continue;
+        }
+
+        output.addEvent (message, samplePosition);
+    }
+
+    midiMessages.swapWith (output);
+
+    storeReadoutDiagrams (requested);
+}
+
+// ---- Boilerplate ----------------------------------------------------
+
+juce::AudioProcessorEditor* OrchHarpAudioProcessor::createEditor()
+{
+    return new OrchHarpAudioProcessorEditor (*this);
+}
+
+bool OrchHarpAudioProcessor::hasEditor() const { return true; }
+const juce::String OrchHarpAudioProcessor::getName() const { return JucePlugin_Name; }
+bool OrchHarpAudioProcessor::acceptsMidi() const { return true; }
+bool OrchHarpAudioProcessor::producesMidi() const { return true; }
+bool OrchHarpAudioProcessor::isMidiEffect() const { return true; }
+double OrchHarpAudioProcessor::getTailLengthSeconds() const { return 0.0; }
+int OrchHarpAudioProcessor::getNumPrograms() { return 1; }
+int OrchHarpAudioProcessor::getCurrentProgram() { return 0; }
+void OrchHarpAudioProcessor::setCurrentProgram (int) {}
+const juce::String OrchHarpAudioProcessor::getProgramName (int) { return {}; }
+void OrchHarpAudioProcessor::changeProgramName (int, const juce::String&) {}
+
+void OrchHarpAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+{
+    auto state = parameters.copyState();
+    state.removeChild (state.getChildWithName ("bank"), nullptr);
+    state.appendChild (bankToTree(), nullptr);
+
+    if (auto xml = std::unique_ptr<juce::XmlElement> (state.createXml()))
+        copyXmlToBinary (*xml, destData);
+}
+
+void OrchHarpAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+{
+    if (auto xml = std::unique_ptr<juce::XmlElement> (getXmlFromBinary (data, sizeInBytes)))
+    {
+        if (xml->hasTagName (parameters.state.getType()))
+        {
+            const auto tree = juce::ValueTree::fromXml (*xml);
+            const auto bankChild = tree.getChildWithName ("bank");
+
+            parameters.replaceState (tree);
+
+            if (bankChild.isValid())
+                bankFromTree (bankChild);
+        }
+    }
+
+    resetNoteMap();
+    lastAppliedBankSlot = -1;
+    soundingDiagram = readRequestedDiagram();
+    moveInfo = {};
+    storeReadoutDiagrams (soundingDiagram);
+}
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new OrchHarpAudioProcessor();
+}

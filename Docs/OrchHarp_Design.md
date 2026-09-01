@@ -1,7 +1,14 @@
 # OrchHarp — Design
 
-Date: 2026-08-31
-Status: designed, not started. Build Phase 1 in a fresh thread.
+Date: 2026-08-31 (Phase 1 built 2026-09-01)
+Status: **Phase 1 built** — pure logic (`OrchHarpPedalLogic` + check tool, 29
+assertions green), processor (20 params, string transform, 4 black-key modes,
+playability governor, CC49 + black-key direct/step triggers, 12-slot bank +
+factory fill, bank state persistence) and full visual editor (pedal-diagram
+widget showing sounding-vs-requested, bank grid with shift-save / right-click
+rename+recolour, family helper, governor + trigger rows). VST3 + check target
+both build clean (VS 18 2026 / JUCE at `C:/JUCE/JUCE`). **Not yet live-tested in
+Bitwig.** Phase 2 (glissando engines + pedal-change markers) not started.
 Repo: `C:\AudioDev\Repos\OrchHarp` (git initialised, no remote yet). GitHub
 `johnpascu77-dotcom/OrchHarp` (public, like the rest of the Orch family).
 Plugin code `Ohrp`, VST3, MIDI effect. Consumes the CC49/Harp slot reserved in
@@ -326,12 +333,29 @@ by hand or flip once elevated), a `juce_add_console_app` check target for
 
 ## 12. Open items for the build thread
 
-- Exact default note numbers for the four black-key control params (pick a range
-  that does not collide with a harp's own low playing range once
-  OrchNoteMapper folds it — likely below MIDI 24).
-- Family/variant → diagram tables for the non-7-note families (best-fit rule).
-- Governor move-selection heuristic: how much to favour "a pedal whose string is
-  imminent" vs "any differing pedal" — start simple, tune against a real
-  sonata.
-- Whether `minChangeInterval` should also have a plain-ms option for
-  free-tempo / no-transport use.
+Phase 1 resolutions (2026-09-01):
+
+- **Black-key control note defaults** — direct-select `ctrlDirectLo/Hi` = MIDI
+  0..11 (C-1..B-1), `ctrlStepDownNote/UpNote` = MIDI 12 / 13. All below any
+  folded harp playing range.
+- **Family/variant → diagram** — no per-family tables. `bestFitDiagram(pcSet)`
+  brute-forces all 3^7 pedal assignments and scores: uncovered set member
+  (worst) → string sounding outside the set → least pedal effort → best-fit
+  distance. Exact for 7-note scales, enharmonic doubling for smaller sets.
+  `familyVariantKeyToDiagram` and the factory bank both go through it.
+- **Governor heuristic** — simple: per foot, step the first disagreeing pedal
+  that isn't the one that foot moved last (spreads the work), one notch toward
+  target. "Pedal whose string is imminent" weighting deferred until tuned
+  against a real sonata.
+- **♭→♯ is two moves** in this build (one notch per move), not one — slightly
+  conservative vs §6. TODO: allow the full swing as one move once tuned live.
+- **4/4 assumed** for `minChangeInterval` beat math (1/8=0.5 … 2 bars=8 beats).
+  Time-signature-aware version is a later refinement.
+
+Still open:
+
+- `minChangeInterval` plain-ms option for free-tempo / no-transport use — while
+  the transport is stopped the governor snaps sounding = requested each block
+  (the "set pedals during the rest" model), so this only matters for a running
+  free-tempo host.
+- Governor imminent-string weighting (above).
