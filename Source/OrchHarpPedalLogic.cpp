@@ -259,7 +259,7 @@ namespace ohrp
     {
         int bestIndex = 0;
         int bestDist = 1 << 20;
-        for (int s = -7; s <= 56; ++s)
+        for (int s = -12; s <= 60; ++s)
         {
             const int dist = std::abs (stringIndexToNote (s, diagram, baseOctave) - noteNumber);
             if (dist < bestDist)

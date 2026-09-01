@@ -235,8 +235,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
     setResizable (true, true);
-    setResizeLimits (680, 840, 1200, 1320);
-    setSize (780, 1030);
+    setResizeLimits (700, 880, 1200, 1360);
+    setSize (820, 1065);
 
     auto& params = audioProcessor.getParameters();
 
@@ -392,7 +392,45 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
         const int baseKey = juce::jlimit (0, 11, baseKeyBox.getSelectedId() - 1);
         const int slot = juce::jlimit (0, OrchHarpAudioProcessor::kNumBankSlots - 1,
                                        (int) helperSlotSlider.getValue() - 1);
-        audioProcessor.writeFamilyToSlot (family, variant, baseKey, slot);
+        const auto diagram = ohrp::familyVariantKeyToDiagram (family, variant, baseKey);
+        const juce::String name = baseKeyBox.getText() + " " + variantBox.getText();
+        audioProcessor.setBankSlot (slot, diagram, name);
+        refreshBankCells();
+    };
+
+    // Custom pitch-class set -> best-fit diagram -> slot (for hexachords /
+    // exotic subsets the family list doesn't cover).
+    pcSetLabel.setText ("or PC set (e.g. 0 1 2 6 7 8):", juce::dontSendNotification);
+    styleLabel (pcSetLabel, 12.0f);
+    addAndMakeVisible (pcSetLabel);
+    pcSetEditor.setColour (juce::TextEditor::backgroundColourId, kPanel);
+    pcSetEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white);
+    pcSetEditor.setColour (juce::TextEditor::outlineColourId, kAccent);
+    addAndMakeVisible (pcSetEditor);
+    pcSetWriteButton.setColour (juce::TextButton::buttonColourId, kPanel);
+    pcSetWriteButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    addAndMakeVisible (pcSetWriteButton);
+    pcSetWriteButton.onClick = [this]
+    {
+        std::vector<int> pcs;
+        for (auto& tok : juce::StringArray::fromTokens (pcSetEditor.getText(), " ,;", ""))
+        {
+            const auto t = tok.trim();
+            if (t.isNotEmpty() && t.containsOnly ("0123456789-"))
+                pcs.push_back (((t.getIntValue() % 12) + 12) % 12);
+        }
+        if (pcs.empty())
+            return;
+        std::sort (pcs.begin(), pcs.end());
+        pcs.erase (std::unique (pcs.begin(), pcs.end()), pcs.end());
+
+        const int slot = juce::jlimit (0, OrchHarpAudioProcessor::kNumBankSlots - 1,
+                                       (int) helperSlotSlider.getValue() - 1);
+        juce::String name = "Set {";
+        for (size_t i = 0; i < pcs.size(); ++i)
+            name << (i ? "," : "") << pcs[i];
+        name << "}";
+        audioProcessor.setBankSlot (slot, ohrp::bestFitDiagram (pcs), name);
         refreshBankCells();
     };
 
@@ -431,6 +469,15 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
         s.setSliderStyle (juce::Slider::IncDecButtons);
         s.setTextBoxStyle (juce::Slider::TextBoxLeft, false, 52, 22);
         s.setRange (lo, hi, 1);
+        styleSlider (s);
+    };
+
+    auto initNoteIncDec = [] (juce::Slider& s)
+    {
+        s.setSliderStyle (juce::Slider::IncDecButtons);
+        s.setTextBoxStyle (juce::Slider::TextBoxLeft, false, 60, 22);
+        s.setRange (0, 127, 1);
+        s.textFromValueFunction = [] (double v) { return noteName (juce::jlimit (0, 127, (int) v)); };
         styleSlider (s);
     };
 
@@ -473,23 +520,24 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     styleLabel (contourGlissLabel, 13.0f, true);
     addAndMakeVisible (contourGlissLabel);
 
-    glissCcLabel.setText ("Gliss CC# / lo-hi string / base oct", juce::dontSendNotification);
+    glissCcLabel.setText ("Gliss CC# (0 = off)", juce::dontSendNotification);
     styleLabel (glissCcLabel, 12.0f);
     addAndMakeVisible (glissCcLabel);
     initIncDec (glissCcSlider, 0, 127);
-    initIncDec (glissLoStringSlider, 0, 55);
-    initIncDec (glissHiStringSlider, 0, 55);
-    initIncDec (glissBaseOctaveSlider, 0, 7);
     addAndMakeVisible (glissCcSlider);
-    addAndMakeVisible (glissLoStringSlider);
-    addAndMakeVisible (glissHiStringSlider);
-    addAndMakeVisible (glissBaseOctaveSlider);
     glissCcAttachment = std::make_unique<SliderAttachment> (params, "glissCc", glissCcSlider);
-    glissLoStringAttachment = std::make_unique<SliderAttachment> (params, "glissLoString", glissLoStringSlider);
-    glissHiStringAttachment = std::make_unique<SliderAttachment> (params, "glissHiString", glissHiStringSlider);
-    glissBaseOctaveAttachment = std::make_unique<SliderAttachment> (params, "glissBaseOctave", glissBaseOctaveSlider);
 
-    glissVelLabel.setText ("Vel CC# / fixed vel / ring", juce::dontSendNotification);
+    glissNoteRangeLabel.setText ("Gliss low / high note", juce::dontSendNotification);
+    styleLabel (glissNoteRangeLabel, 12.0f);
+    addAndMakeVisible (glissNoteRangeLabel);
+    initNoteIncDec (glissLoNoteSlider);
+    initNoteIncDec (glissHiNoteSlider);
+    addAndMakeVisible (glissLoNoteSlider);
+    addAndMakeVisible (glissHiNoteSlider);
+    glissLoNoteAttachment = std::make_unique<SliderAttachment> (params, "glissLoNote", glissLoNoteSlider);
+    glissHiNoteAttachment = std::make_unique<SliderAttachment> (params, "glissHiNote", glissHiNoteSlider);
+
+    glissVelLabel.setText ("Vel CC# / fixed vel / ring / release", juce::dontSendNotification);
     styleLabel (glissVelLabel, 12.0f);
     addAndMakeVisible (glissVelLabel);
     initIncDec (glissVelCcSlider, 0, 127);
@@ -502,6 +550,10 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     styleBox (glissRingBox);
     addAndMakeVisible (glissRingBox);
     glissRingAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRing", glissRingBox);
+    glissReleaseBox.addItemList ({ "Hold", "1/8", "1/4", "1/2", "1 bar" }, 1);
+    styleBox (glissReleaseBox);
+    addAndMakeVisible (glissReleaseBox);
+    glissReleaseAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRelease", glissReleaseBox);
 
     // ---- Trigger glissando ----
     triggerGlissLabel.setText ("Trigger Glissando", juce::dontSendNotification);
@@ -511,35 +563,34 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     glissTrigZoneLabel.setText ("Trigger note zone lo / hi (0/0 = off)", juce::dontSendNotification);
     styleLabel (glissTrigZoneLabel, 12.0f);
     addAndMakeVisible (glissTrigZoneLabel);
-    initIncDec (glissTrigLoSlider, 0, 127);
-    initIncDec (glissTrigHiSlider, 0, 127);
+    initNoteIncDec (glissTrigLoSlider);
+    initNoteIncDec (glissTrigHiSlider);
     addAndMakeVisible (glissTrigLoSlider);
     addAndMakeVisible (glissTrigHiSlider);
     glissTrigLoAttachment = std::make_unique<SliderAttachment> (params, "glissTrigLo", glissTrigLoSlider);
     glissTrigHiAttachment = std::make_unique<SliderAttachment> (params, "glissTrigHi", glissTrigHiSlider);
 
-    glissRunDirLabel.setText ("Run direction / span / duration", juce::dontSendNotification);
+    glissRunWindowLabel.setText ("Run low / high note", juce::dontSendNotification);
+    styleLabel (glissRunWindowLabel, 12.0f);
+    addAndMakeVisible (glissRunWindowLabel);
+    initNoteIncDec (glissRunLoNoteSlider);
+    initNoteIncDec (glissRunHiNoteSlider);
+    addAndMakeVisible (glissRunLoNoteSlider);
+    addAndMakeVisible (glissRunHiNoteSlider);
+    glissRunLoNoteAttachment = std::make_unique<SliderAttachment> (params, "glissRunLoNote", glissRunLoNoteSlider);
+    glissRunHiNoteAttachment = std::make_unique<SliderAttachment> (params, "glissRunHiNote", glissRunHiNoteSlider);
+
+    glissRunDirLabel.setText ("Run direction / duration  (velocity scales reach)", juce::dontSendNotification);
     styleLabel (glissRunDirLabel, 12.0f);
     addAndMakeVisible (glissRunDirLabel);
     glissRunDirectionBox.addItemList ({ "Up", "Down", "Up-Down", "Down-Up" }, 1);
     styleBox (glissRunDirectionBox);
     addAndMakeVisible (glissRunDirectionBox);
     glissRunDirectionAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDirection", glissRunDirectionBox);
-    initIncDec (glissRunSpanSlider, 1, 48);
-    addAndMakeVisible (glissRunSpanSlider);
-    glissRunSpanAttachment = std::make_unique<SliderAttachment> (params, "glissRunSpan", glissRunSpanSlider);
     glissRunDurationBox.addItemList ({ "1/16", "1/8", "1/4", "1/2", "1 bar" }, 1);
     styleBox (glissRunDurationBox);
     addAndMakeVisible (glissRunDurationBox);
     glissRunDurationAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDuration", glissRunDurationBox);
-
-    glissRunAnchorLabel.setText ("Run starts from", juce::dontSendNotification);
-    styleLabel (glissRunAnchorLabel, 12.0f);
-    addAndMakeVisible (glissRunAnchorLabel);
-    glissRunAnchorBox.addItemList ({ "Trigger Note", "Low String", "High String" }, 1);
-    styleBox (glissRunAnchorBox);
-    addAndMakeVisible (glissRunAnchorBox);
-    glissRunAnchorAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunAnchor", glissRunAnchorBox);
 
     statusLabel.setJustificationType (juce::Justification::centred);
     statusLabel.setColour (juce::Label::textColourId, kAmber);
@@ -649,6 +700,14 @@ void OrchHarpAudioProcessorEditor::resized()
         row.removeFromLeft (6);
         helperWriteButton.setBounds (row.removeFromLeft (110));
     }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        pcSetLabel.setBounds (row.removeFromLeft (200));
+        pcSetEditor.setBounds (row.removeFromLeft (170));
+        row.removeFromLeft (8);
+        pcSetWriteButton.setBounds (row.removeFromLeft (120));
+    }
     area.removeFromTop (10);
 
     governorLabel.setBounds (area.removeFromTop (18));
@@ -693,24 +752,25 @@ void OrchHarpAudioProcessorEditor::resized()
     contourGlissLabel.setBounds (area.removeFromTop (18));
     {
         auto row = area.removeFromTop (26);
-        glissCcLabel.setBounds (row.removeFromLeft (210));
+        glissCcLabel.setBounds (row.removeFromLeft (160));
         glissCcSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (24);
+        glissNoteRangeLabel.setBounds (row.removeFromLeft (130));
+        glissLoNoteSlider.setBounds (row.removeFromLeft (104));
         row.removeFromLeft (6);
-        glissLoStringSlider.setBounds (row.removeFromLeft (96));
-        row.removeFromLeft (6);
-        glissHiStringSlider.setBounds (row.removeFromLeft (96));
-        row.removeFromLeft (6);
-        glissBaseOctaveSlider.setBounds (row.removeFromLeft (96));
+        glissHiNoteSlider.setBounds (row.removeFromLeft (104));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
         glissVelLabel.setBounds (row.removeFromLeft (210));
-        glissVelCcSlider.setBounds (row.removeFromLeft (96));
+        glissVelCcSlider.setBounds (row.removeFromLeft (90));
         row.removeFromLeft (6);
-        glissVelocitySlider.setBounds (row.removeFromLeft (96));
+        glissVelocitySlider.setBounds (row.removeFromLeft (90));
         row.removeFromLeft (10);
-        glissRingBox.setBounds (row.removeFromLeft (120));
+        glissRingBox.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (6);
+        glissReleaseBox.setBounds (row.removeFromLeft (90));
     }
     area.removeFromTop (10);
 
@@ -718,25 +778,25 @@ void OrchHarpAudioProcessorEditor::resized()
     {
         auto row = area.removeFromTop (26);
         glissTrigZoneLabel.setBounds (row.removeFromLeft (210));
-        glissTrigLoSlider.setBounds (row.removeFromLeft (96));
+        glissTrigLoSlider.setBounds (row.removeFromLeft (104));
         row.removeFromLeft (6);
-        glissTrigHiSlider.setBounds (row.removeFromLeft (96));
+        glissTrigHiSlider.setBounds (row.removeFromLeft (104));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        glissRunDirLabel.setBounds (row.removeFromLeft (210));
+        glissRunWindowLabel.setBounds (row.removeFromLeft (210));
+        glissRunLoNoteSlider.setBounds (row.removeFromLeft (104));
+        row.removeFromLeft (6);
+        glissRunHiNoteSlider.setBounds (row.removeFromLeft (104));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        glissRunDirLabel.setBounds (row.removeFromLeft (250));
         glissRunDirectionBox.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (8);
-        glissRunSpanSlider.setBounds (row.removeFromLeft (96));
-        row.removeFromLeft (8);
         glissRunDurationBox.setBounds (row.removeFromLeft (100));
-    }
-    area.removeFromTop (4);
-    {
-        auto row = area.removeFromTop (26);
-        glissRunAnchorLabel.setBounds (row.removeFromLeft (210));
-        glissRunAnchorBox.setBounds (row.removeFromLeft (130));
     }
 
     auto footer = getLocalBounds().reduced (20, 0);
@@ -759,13 +819,14 @@ void OrchHarpAudioProcessorEditor::timerCallback()
 
     const bool fixedVel = audioProcessor.getParameters().getRawParameterValue ("glissVelCc")->load() < 0.5f;
     glissVelocitySlider.setEnabled (pedalMode && fixedVel);
-    for (auto* c : { &glissCcSlider, &glissLoStringSlider, &glissHiStringSlider, &glissBaseOctaveSlider,
-                     &glissVelCcSlider, &glissTrigLoSlider, &glissTrigHiSlider, &glissRunSpanSlider })
+    for (auto* c : { &glissCcSlider, &glissLoNoteSlider, &glissHiNoteSlider,
+                     &glissVelCcSlider, &glissTrigLoSlider, &glissTrigHiSlider,
+                     &glissRunLoNoteSlider, &glissRunHiNoteSlider })
         c->setEnabled (pedalMode);
     glissRingBox.setEnabled (pedalMode);
+    glissReleaseBox.setEnabled (pedalMode);
     glissRunDirectionBox.setEnabled (pedalMode);
     glissRunDurationBox.setEnabled (pedalMode);
-    glissRunAnchorBox.setEnabled (pedalMode);
 
     refreshBankCells();
     updateStatus();

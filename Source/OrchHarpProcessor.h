@@ -56,7 +56,7 @@ public:
     void saveCurrentDiagramToSlot (int index);       // requested diagram -> slot
     void renameBankSlot (int index, const juce::String& name);
     void recolourBankSlot (int index, juce::Colour colour);
-    void writeFamilyToSlot (ohrp::Family family, int variant, int baseKey, int slotIndex);
+    void setBankSlot (int index, const ohrp::Diagram& offsets, const juce::String& name);
     void resetBankToFactory();
 
     // ---- UI status readouts (message thread; plain reads) -------------------
@@ -92,18 +92,18 @@ private:
     std::atomic<float>* ctrlStepUpParam = nullptr;
 
     std::atomic<float>* glissCcParam = nullptr;
-    std::atomic<float>* glissLoStringParam = nullptr;
-    std::atomic<float>* glissHiStringParam = nullptr;
-    std::atomic<float>* glissBaseOctaveParam = nullptr;
+    std::atomic<float>* glissLoNoteParam = nullptr;
+    std::atomic<float>* glissHiNoteParam = nullptr;
     std::atomic<float>* glissVelCcParam = nullptr;
     std::atomic<float>* glissVelocityParam = nullptr;
     std::atomic<float>* glissRingParam = nullptr;
+    std::atomic<float>* glissReleaseParam = nullptr;
     std::atomic<float>* glissTrigLoParam = nullptr;
     std::atomic<float>* glissTrigHiParam = nullptr;
+    std::atomic<float>* glissRunLoNoteParam = nullptr;
+    std::atomic<float>* glissRunHiNoteParam = nullptr;
     std::atomic<float>* glissRunDirectionParam = nullptr;
-    std::atomic<float>* glissRunSpanParam = nullptr;
     std::atomic<float>* glissRunDurationParam = nullptr;
-    std::atomic<float>* glissRunAnchorParam = nullptr;
 
     // Typed handles for guarded write-back from CC / bank recall / nudge.
     std::array<juce::AudioParameterChoice*, 7> pedalChoice { };
@@ -126,11 +126,13 @@ private:
     std::vector<TrackedNote> activeNotes;
 
     // ---- Governor state ----
+    // Timing is beat-accumulator based (not host-ppq compared) so a loop or a
+    // transport jump can't wedge it.
     ohrp::Diagram soundingDiagram { ohrp::kAllNatural };
     ohrp::MoveInfo moveInfo;
-    double lastMovePpq = -1.0e12;
-    double lastNudgePpq = -1.0e12;
-    std::array<double, 7> lastStringSoundPpq { };
+    double beatsSinceMove = 1.0e6;
+    double beatsSinceNudge = 1.0e6;
+    std::array<double, 7> stringQuietBeats { };
     int lastAppliedBankSlot = -1;
 
     double sampleRate = 44100.0;
@@ -138,10 +140,12 @@ private:
     bool wasPlaying = false;
 
     // ---- Glissando engine ----
+    static constexpr int kGlissBaseOctave = 2; // absolute string index 0 -> ~MIDI 24
     int lastGlissString = std::numeric_limits<int>::min();
     int lastGlissNote = -1;              // Monophonic contour: the ringing gliss note
     int glissVelValue = 96;              // latched from glissVelCc
     std::vector<int> glissRingNotes;     // Ring mode: every ringing gliss note
+    double glissIdleBeats = 0.0;         // since the last gliss note; drives idle release
 
     struct PendingGlissEvent
     {
@@ -151,7 +155,6 @@ private:
     };
     std::vector<PendingGlissEvent> pendingGliss; // sorted by ppq
     int runLastNote = -1;                // Monophonic trigger-run: last emitted note
-    double runOffPpq = -1.0e12;          // when to release runLastNote
 
     // ---- Readouts ----
     std::atomic<int> lastInputNote { -1 };
@@ -168,11 +171,13 @@ private:
     ohrp::Diagram readRequestedDiagram() const;
     void applyDiagramToParams (const ohrp::Diagram& diagram);
     double minChangeIntervalInBeats() const;
-    int  glissBaseOctave() const;
+    double glissReleaseInBeats() const;  // 0 = Hold (never idle-release)
+    int  glissWindowLoIndex (bool trigger) const;
+    int  glissWindowHiIndex (bool trigger) const;
 
     void resetNoteMap();
     void snapSoundingToRequested (const ohrp::Diagram& requested);
-    void runGovernor (const ohrp::Diagram& requested, double blockPpq);
+    void runGovernor (const ohrp::Diagram& requested, double blockBeats);
 
     void handleControlCc (const juce::MidiMessage& message);
     bool tryConsumeControlNote (int noteNumber); // true if consumed as a control-zone note
@@ -181,6 +186,7 @@ private:
     bool tryStartTriggerRun (int noteNumber, juce::uint8 velocity, double eventPpq, double ppqPerSample);
     void drainPendingGliss (juce::MidiBuffer& output, double blockStartPpq, double blockEndPpq,
                             double ppqPerSample, int numSamples);
+    void releaseIdleGlissNotes (juce::MidiBuffer& output, int samplePosition);
     void flushGlissNotes (juce::MidiBuffer& output, int samplePosition);
     void handleNoteOn (const juce::MidiMessage& message, int samplePosition, juce::MidiBuffer& output,
                        double blockPpq, double ppqPerSample);

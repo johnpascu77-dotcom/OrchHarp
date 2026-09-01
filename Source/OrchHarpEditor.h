@@ -80,6 +80,9 @@ private:
     juce::ComboBox familyBox, variantBox, baseKeyBox;
     juce::Slider helperSlotSlider;
     juce::TextButton helperWriteButton { "Write to slot" };
+    juce::Label pcSetLabel;
+    juce::TextEditor pcSetEditor;
+    juce::TextButton pcSetWriteButton { "Write PC set" };
 
     juce::Label governorLabel;
     juce::ToggleButton playabilityButton;
@@ -92,15 +95,15 @@ private:
     juce::Slider ctrlDirectLoSlider, ctrlDirectHiSlider, ctrlStepDownSlider, ctrlStepUpSlider;
 
     juce::Label contourGlissLabel;
-    juce::Label glissCcLabel, glissRangeLabel, glissBaseOctaveLabel, glissVelLabel, glissRingLabel;
-    juce::Slider glissCcSlider, glissLoStringSlider, glissHiStringSlider, glissBaseOctaveSlider;
+    juce::Label glissCcLabel, glissNoteRangeLabel, glissVelLabel, glissReleaseLabel;
+    juce::Slider glissCcSlider, glissLoNoteSlider, glissHiNoteSlider;
     juce::Slider glissVelCcSlider, glissVelocitySlider;
-    juce::ComboBox glissRingBox;
+    juce::ComboBox glissRingBox, glissReleaseBox;
 
     juce::Label triggerGlissLabel;
-    juce::Label glissTrigZoneLabel, glissRunDirLabel, glissRunSpanLabel, glissRunDurLabel, glissRunAnchorLabel;
-    juce::Slider glissTrigLoSlider, glissTrigHiSlider, glissRunSpanSlider;
-    juce::ComboBox glissRunDirectionBox, glissRunDurationBox, glissRunAnchorBox;
+    juce::Label glissTrigZoneLabel, glissRunWindowLabel, glissRunDirLabel;
+    juce::Slider glissTrigLoSlider, glissTrigHiSlider, glissRunLoNoteSlider, glissRunHiNoteSlider;
+    juce::ComboBox glissRunDirectionBox, glissRunDurationBox;
 
     juce::Label statusLabel;
 
@@ -113,10 +116,10 @@ private:
     std::unique_ptr<ButtonAttachment> playabilityAttachment, changesAtRestsOnlyAttachment, avoidRingingAttachment;
     std::unique_ptr<SliderAttachment> ccBankAttachment, ccChannelAttachment;
     std::unique_ptr<SliderAttachment> ctrlDirectLoAttachment, ctrlDirectHiAttachment, ctrlStepDownAttachment, ctrlStepUpAttachment;
-    std::unique_ptr<SliderAttachment> glissCcAttachment, glissLoStringAttachment, glissHiStringAttachment, glissBaseOctaveAttachment;
-    std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment, glissRunSpanAttachment;
-    std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment;
-    std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissRunDirectionAttachment, glissRunDurationAttachment, glissRunAnchorAttachment;
+    std::unique_ptr<SliderAttachment> glissCcAttachment, glissLoNoteAttachment, glissHiNoteAttachment;
+    std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment;
+    std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment, glissRunLoNoteAttachment, glissRunHiNoteAttachment;
+    std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissReleaseAttachment, glissRunDirectionAttachment, glissRunDurationAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OrchHarpAudioProcessorEditor)
 };

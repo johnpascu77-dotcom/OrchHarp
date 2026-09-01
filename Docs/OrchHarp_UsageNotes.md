@@ -46,8 +46,9 @@ a slot or two spare if you're experimenting.
 
 ## Family Helper  ->  Write to slot
 
-A calculator for building a slot from a scale instead of clicking seven pedals.
-It does **not** change the live diagram — it only fills a bank slot.
+A calculator for filling a bank slot from a scale instead of clicking seven
+pedals. It does **not** change the live diagram — it only writes a slot (and
+**renames the slot** to match what it wrote).
 
 1. **Family** — Major / Minor, 7-Chord, Whole Tone, or Pentatonic.
 2. **Variant** — repopulates per family (Major / Natural Minor / Harmonic Minor /
@@ -55,16 +56,25 @@ It does **not** change the live diagram — it only fills a bank slot.
 3. **C** (base key) — the root, C…B.
 4. The **number box** — which bank slot to write (1–12).
 5. **Write to slot** — computes the best pedal diagram that sounds exactly that
-   scale and drops it into that slot. For a 7-note scale that's the one correct
-   spelling; for a smaller set (chords, pentatonics, whole-tone) the leftover
-   pedals enharmonically double a scale note, which is how a harpist mutes a
-   string.
+   scale, drops it into that slot and names the slot (e.g. "A Harmonic Minor").
+   For a 7-note scale that's the one correct spelling; for a smaller set the
+   leftover pedals enharmonically double a scale note.
 
 Then **click that slot** to make it live.
 
-Example: Family *Major / Minor*, Variant *Harmonic Minor*, key *A*, slot *4*,
-Write to slot -> slot 4 now holds A harmonic minor; click it and white-key input
-plays that scale.
+### Custom scales / hexachords  ->  "or PC set"
+
+The family list doesn't cover every set. Type a **pitch-class set** into the
+`or PC set` field — space, comma or semicolon separated, e.g. `0 1 2 6 7 8` or
+`0,1,4,5,8,9` — pick a slot in the number box, and hit **Write PC set**. It
+best-fits the seven pedals to that set (extra letters double the nearest member)
+and names the slot `Set {0,1,2,6,7,8}`. This is the path for atonal subsets.
+
+### Any other diagram
+
+Set the pedals by hand — the 7 combos or clicking the diagram — then
+**Shift-click a slot** to save the current diagram there. Right-click the slot
+to rename it.
 
 ---
 
@@ -107,52 +117,46 @@ re-pedal the harp on the fly — the emergent Synchron-style trick.
 
 ## Contour Glissando
 
-A CC contour becomes a run: as the CC sweeps, OrchHarp fires a note every time
-the mapped string changes.
+A CC contour becomes a run: as the CC sweeps between two notes, OrchHarp fires a
+note every time the diagram-snapped string changes.
 
 - **Gliss CC#** — the CC to follow. `0` = engine off.
-- **lo string / hi string** — the run's range, as absolute string indices
-  (0 = the low C, each step = one string). Set **lo > hi** for a contour that
-  descends as the CC rises.
-- **base oct** — where string index 0 sits (0–7; 2 = MIDI 24 / C1). Moves the
-  whole string→pitch mapping up or down an octave at a time. Shared with the
-  Trigger engine.
+- **Gliss low note / high note** — the two ends of the sweep, as real notes
+  (shown as note names). CC 0 → low note, CC 127 → high note. Set **low above
+  high** for a contour that descends as the CC rises. Only the harp strings that
+  fall between them play — the CC steps through the current diagram's degrees,
+  not chromatically.
 - **Vel CC#** — a second CC for live velocity. `0` = use the fixed value.
 - **fixed vel** — velocity when Vel CC# is 0.
-- **Ring** — *Monophonic*: each new string cuts the previous note (clean run,
-  the one to use for notation). *Ring*: notes pile up and ring like a real harp
-  gliss; they release when the Gliss CC returns to 0, on transport stop, or on
-  All-Notes-Off.
+- **Ring** — *Monophonic*: each new string cuts the previous note (clean run —
+  the one for notation). *Ring*: notes pile up and ring like a real harp gliss.
+- **Release** — how long the CC must sit still before the **last held note is
+  let go** (Hold / 1/8 / 1/4 / 1/2 / 1 bar). *Hold* keeps the old behaviour
+  (the note rings until the CC hits 0 or the transport stops). Use 1/4 or 1/8
+  so a drawn ramp ends with a note of sane length in the score.
 
-Draw a rising ramp -> ascending scale run. An LFO -> oscillating runs. A
-hand-drawn curve -> that shape as harp notes. Change a pedal mid-sweep and the
-run recolours from that point.
+Draw a rising ramp → ascending run. An LFO → oscillating runs. A hand-drawn
+curve → that shape as harp notes. Change a pedal mid-sweep and the run recolours
+from that point.
 
 ## Trigger Glissando
 
-One note in a zone sprays a whole run — the classic notated gliss, no drawing.
+One note in a zone fires a whole run — the classic notated gliss, no drawing.
+The trigger note's pitch is irrelevant; it just fires.
 
 - **Trigger note zone lo / hi** — the note range that fires a run. **0 / 0 =
-  off.** Put this somewhere out of the way (e.g. MIDI 20–23).
-- **Run direction** — Up / Down / Up-Down / Down-Up.
-- **Run span (strings)** — how many strings the run covers. **Note velocity
-  scales it**: a soft note ≈ a quarter of the span, full velocity = the whole
-  span.
+  off.** Put it somewhere out of the way (e.g. MIDI 20–23).
+- **Run low note / high note** — the two ends of the run, as real notes. This is
+  a **separate** window from the Contour engine's.
+- **Run direction** — Up (from the low note), Down (from the high note),
+  Up-Down, Down-Up.
 - **Run duration** — total length, tempo-synced (1/16 … 1 bar, 4/4 assumed).
-- **Run starts from** —
-  - *Trigger Note* — the string nearest the note you played (clamped into the
-    lo/hi-string window). Natural when the trigger zone is in the playing range.
-  - *Low String* — always start at **Gliss Low String**. Pair with **Up**.
-  - *High String* — always start at **Gliss High String**. Pair with **Down** —
-    a downward gliss then starts at the top no matter where the trigger note
-    sits.
+- **Note velocity scales the reach** — a soft trigger note runs a short way in
+  from the start end; full velocity runs the whole window.
 
-The run is kept **inside the Gliss Low String … High String window** (shared
-with the Contour engine) — it never silently floors on the bottom string, it
-stops at the string you set. It follows the current diagram; a pedal change
-mid-run recolours the tail. Ring / Monophonic is shared with the Contour engine.
+The run follows the current diagram; a pedal change mid-run recolours the tail.
+Ring / Monophonic and Release are shared with the Contour engine.
 
-So for a big descending gliss: set **Gliss High String** where you want the top,
-**Gliss Low String** where you want the bottom, **Run direction = Down**, **Run
-starts from = High String**, **Run span** large. Base Octave (0–7) moves the
-whole string→pitch mapping if the run sits in the wrong register.
+So for a big descending gliss: **Run low note** = the bottom, **Run high note**
+= the top, **Run direction = Down**, and hit the trigger note hard for the full
+span. No base-octave guessing — the two notes say exactly where it runs.

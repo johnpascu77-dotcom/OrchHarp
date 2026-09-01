@@ -4,11 +4,16 @@ Date: 2026-08-31 (Phase 1 + 2a built 2026-09-01)
 Status: **Phase 1 live** (transformer — pure logic + check tool, processor,
 visual editor with the real harp pedal-diagram readout; live-tested in Bitwig,
 "stunning results"). **Phase 2a built, not yet live-tested** — the two glissando
-engines (contour-follower + trigger-gesture), 11 new params, 40 check assertions
-green, VST3 clean (VS 18 2026 / JUCE `C:/JUCE/JUCE`). Contour engine + pedal-run
-recolouring confirmed live 2026-09-01; click-to-edit on the pedal diagram added.
-**Phase 2b** (pedal-change markers → OrchCapture) deprioritised — see §9.
-Usage walkthrough: `OrchHarp_UsageNotes.md`.
+engines (contour-follower + trigger-gesture), 40 check assertions green, VST3
+clean (VS 18 2026 / JUCE `C:/JUCE/JUCE`). Contour engine + pedal-run recolouring
+confirmed live 2026-09-01. Post-test revisions same day: click-to-edit on the
+pedal diagram; Family-Helper + PC-set writes now name the slot;
+**governor timing moved to beat accumulators** (a loop region no longer wedges
+it); contour `glissRelease` idle-release so the last run note ends;
+gliss window limits are now **real MIDI notes** (Low/High Note), base-octave /
+run-span / run-anchor knobs dropped, contour and trigger have separate windows.
+**Phase 2b** (pedal-change markers → OrchCapture) deprioritised — see §9. Usage
+walkthrough: `OrchHarp_UsageNotes.md`.
 Repo: `C:\AudioDev\Repos\OrchHarp` (git initialised, no remote yet). GitHub
 `johnpascu77-dotcom/OrchHarp` (public, like the rest of the Orch family).
 Plugin code `Ohrp`, VST3, MIDI effect. Consumes the CC49/Harp slot reserved in
@@ -283,36 +288,37 @@ sounding diagram, requested diagram, moves-in-transit count, last CC.
 
 ## 9. Phase 2 — the generator + notation
 
-### Contour-follower glissando — BUILT (Phase 2a, 2026-09-01)
+Internal string model: absolute string index, fixed base octave
+`kGlissBaseOctave = 2` (index 0 ≈ MIDI 24). Window limits are entered as **real
+MIDI notes** and converted per-block via `ohrp::noteToNearestStringIndex` against
+the current sounding diagram — no user-facing base-octave knob.
 
-`glissCc` param (Int, 0 = off). The CC value maps via `ohrp::mapContour` to an
-**absolute string index** between `glissLoString` and `glissHiString`
-(`glissLoString` may exceed `glissHiString` for a descending map);
-`ohrp::stringIndexToNote` resolves it against the **sounding** diagram at the
-`glissBaseOctave` (string index 0 = MIDI 24 by default). A note fires each time
-that string index changes — a rising ramp → ascending run, an LFO → oscillating
-runs, a hand-drawn curve → that shape, an MC ModulationRoute → arc-driven gliss.
-Because the pitch is resolved live, re-pedalling mid-sweep recolours the run.
-Velocity: `glissVelCc` (0 = use fixed `glissVelocity`). `glissRing`:
-**Monophonic** (each new string note-offs the previous) / **Ring** (notes ring
-and pile up; damped when `glissCc` returns to 0, on transport stop, or
-All-Notes-Off). The `glissCc` / `glissVelCc` messages are consumed, not passed
-downstream. Gliss notes are emitted on channel 1.
+### Contour-follower glissando — BUILT (Phase 2a, revised 2026-09-01)
 
-### Trigger-gesture glissando — BUILT (Phase 2a, 2026-09-01)
+`glissCc` (Int, 0 = off). `ohrp::mapContour(value, loIdx, hiIdx)` maps the CC to
+a string index between `glissLoNote` and `glissHiNote` (low may map above high
+for a descending contour). `ohrp::stringIndexToNote` resolves it live, so
+re-pedalling mid-sweep recolours the run. A note fires each time the index
+changes. Velocity: `glissVelCc` (0 = fixed `glissVelocity`). `glissRing`:
+Monophonic / Ring. `glissRelease` (Hold / 1/8 / 1/4 / 1/2 / 1 bar): a
+beat-accumulator (`glissIdleBeats`) releases the held note(s) after that much
+CC stillness — so the last note of a drawn ramp gets a real duration in the
+score. `glissCc` / `glissVelCc` are consumed, not passed downstream. Notes on
+channel 1.
 
-`glissTrigLo` / `glissTrigHi` note zone (0 / 0 = off). A note-on in the zone is
-consumed and schedules a run. Start = `glissRunAnchor`: *Trigger Note*
-(`noteToNearestStringIndex` of the trigger pitch, clamped to the window) /
-*Low String* / *High String*. `span = glissRunSpan * (0.25 + 0.75·vel/127)`
-strings, `glissRunDirection` (Up / Down / Up-Down / Down-Up), spread evenly over
-`glissRunDuration` (1/16…1 bar, 4/4 assumed). Every index is **clamped to
-`[min(glissLoString,glissHiString), max(...)]`** with consecutive duplicates
-dropped, so a run stops at the configured string instead of flooring at MIDI 0.
-Scheduled events carry a **string index**, resolved to a pitch at emission time,
-so a pedal change mid-run recolours the tail. `glissBaseOctave` is 0..7.
-Monophonic / Ring per `glissRing`. Scheduler = a ppq-sorted `pendingGliss`
-vector drained each block.
+### Trigger-gesture glissando — BUILT (Phase 2a, revised 2026-09-01)
+
+`glissTrigLo` / `glissTrigHi` note zone (0 / 0 = off). The trigger note's pitch
+is irrelevant — a note in the zone just fires a run across its **own** window
+`glissRunLoNote` … `glissRunHiNote` (separate from the contour window).
+`glissRunDirection` picks the start end (Up from low, Down from high). Velocity
+scales the **reach**: `span = round(windowLen · (0.25 + 0.75·vel/127))` — soft
+note = a short run from the start end, full velocity = the whole window. Spread
+over `glissRunDuration` (1/16…1 bar, 4/4). Indices clamped to the window,
+consecutive dupes dropped. Events carry a string index, resolved at emission
+time (pedal change mid-run recolours the tail). Monophonic / Ring per
+`glissRing`; `glissRelease` also catches ringing trigger runs. Scheduler = a
+ppq-sorted `pendingGliss` vector drained each block.
 
 ### Pedal-change markers — Phase 2b, DEPRIORITISED (2026-09-01)
 
