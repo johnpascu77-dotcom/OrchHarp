@@ -237,10 +237,6 @@ void BankCellComponent::mouseDown (const juce::MouseEvent& e)
 OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    setResizable (true, true);
-    setResizeLimits (780, 600, 1200, 950);
-    setSize (880, 720);
-
     auto& params = audioProcessor.getParameters();
 
     titleLabel.setText ("OrchHarp", juce::dontSendNotification);
@@ -647,6 +643,13 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
 
     refreshBankCells();
     updateStatus();
+
+    // Size last, so the first resized() runs with the tabs + all children in
+    // place (the tab content panels lay out from resized()).
+    setResizable (true, true);
+    setResizeLimits (780, 600, 1200, 950);
+    setSize (880, 720);
+
     startTimerHz (12);
 }
 
