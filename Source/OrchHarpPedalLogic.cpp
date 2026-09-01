@@ -277,6 +277,136 @@ namespace ohrp
         return static_cast<int> (std::lround (loStringIndex + t * static_cast<float> (hiStringIndex - loStringIndex)));
     }
 
+    int contourNextIndex (int lastInputNote, int lastOutputStringIndex,
+                          int newInputNote, ContourStep step) noexcept
+    {
+        if (lastInputNote < 0)
+            return lastOutputStringIndex; // seed - caller passed the seed index
+
+        const int deltaIn = newInputNote - lastInputNote;
+        const int dir = deltaIn > 0 ? 1 : deltaIn < 0 ? -1 : 0;
+        const int mag = std::abs (deltaIn);
+
+        int degrees = 0;
+        switch (step)
+        {
+            case ContourStep::Literal:  degrees = mag; break;
+            case ContourStep::Compress: degrees = static_cast<int> (std::lround (mag / 3.0)); break;
+            case ContourStep::Expand:   degrees = static_cast<int> (std::lround (mag * 1.5)); break;
+            case ContourStep::Tight:
+            default:                    degrees = static_cast<int> (std::lround (mag / 2.0)); break;
+        }
+
+        if (dir != 0)
+            degrees = std::max (degrees, 1); // the line always moves when the input moves
+
+        return lastOutputStringIndex + dir * degrees;
+    }
+
+    std::vector<int> selectVoices (const std::vector<int>& sortedNotes, const VoiceConfig& config)
+    {
+        const int k = static_cast<int> (sortedNotes.size());
+        if (k == 0)
+            return {};
+
+        // --- 1. hand slice ------------------------------------------------
+        std::vector<int> kept;
+        const bool both = config.hand == 0 || config.splitMode == 0;
+
+        if (both)
+        {
+            for (int i = 0; i < k; ++i)
+                kept.push_back (i);
+        }
+        else if (config.splitMode == 2) // Interlock
+        {
+            const int parity = config.hand == 1 ? 0 : 1; // left = even from the bottom
+            for (int i = 0; i < k; ++i)
+                if (i % 2 == parity)
+                    kept.push_back (i);
+        }
+        else // Block
+        {
+            const int leftCount = k / 2;
+            if (config.hand == 1)
+                for (int i = 0; i < leftCount; ++i) kept.push_back (i);
+            else
+                for (int i = leftCount; i < k; ++i) kept.push_back (i);
+        }
+
+        if (kept.empty())
+            return kept;
+
+        auto isProtected = [&] (int idxInKept)
+        {
+            if (kept.size() <= 1) return true;
+            const bool first = idxInKept == 0;
+            const bool last  = idxInKept == static_cast<int> (kept.size()) - 1;
+            switch (config.protect)
+            {
+                case 1: return first;
+                case 2: return last;
+                case 3: return first || last;
+                default: return false;
+            }
+        };
+
+        auto medianNote = [&] ()
+        {
+            const int lo = sortedNotes[static_cast<size_t> (kept.front())];
+            const int hi = sortedNotes[static_cast<size_t> (kept.back())];
+            return (lo + hi) / 2;
+        };
+
+        // --- 2. polyphony cap: drop the note nearest the median, skipping
+        //        protected ends, until we fit. -----------------------------
+        while (static_cast<int> (kept.size()) > std::max (1, config.maxVoices))
+        {
+            const int mid = medianNote();
+            int victim = -1, victimDist = 1 << 20;
+            for (int i = 0; i < static_cast<int> (kept.size()); ++i)
+            {
+                if (isProtected (i))
+                    continue;
+                const int d = std::abs (sortedNotes[static_cast<size_t> (kept[static_cast<size_t> (i)])] - mid);
+                if (d < victimDist) { victimDist = d; victim = i; }
+            }
+            if (victim < 0)
+                break; // only protected notes left
+            kept.erase (kept.begin() + victim);
+        }
+
+        // --- 3. span clamp: drop the surviving note furthest from the
+        //        protected anchor, until the span fits or only protected
+        //        notes remain (protect wins over span). ------------------
+        auto span = [&] ()
+        {
+            return sortedNotes[static_cast<size_t> (kept.back())]
+                 - sortedNotes[static_cast<size_t> (kept.front())];
+        };
+
+        while (span() > config.maxSpanSemis && kept.size() > 1)
+        {
+            int anchor = medianNote();
+            if (config.protect == 1) anchor = sortedNotes[static_cast<size_t> (kept.front())];
+            if (config.protect == 2) anchor = sortedNotes[static_cast<size_t> (kept.back())];
+
+            int victim = -1, victimDist = -1;
+            for (int i = 0; i < static_cast<int> (kept.size()); ++i)
+            {
+                if (isProtected (i))
+                    continue;
+                const int d = std::abs (sortedNotes[static_cast<size_t> (kept[static_cast<size_t> (i)])] - anchor);
+                if (d > victimDist) { victimDist = d; victim = i; }
+            }
+            if (victim < 0)
+                break; // only protected notes left - protect wins
+            kept.erase (kept.begin() + victim);
+        }
+
+        return kept;
+    }
+
     int numVariants (Family family) noexcept
     {
         switch (family)

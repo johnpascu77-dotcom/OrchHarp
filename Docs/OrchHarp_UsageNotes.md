@@ -11,10 +11,61 @@ note source (MPL / clip / Dorico-exported MIDI) -> [Randomize] -> OrchHarp -> Or
 
 ---
 
-The editor has two tabs. **Harp** — the composing surface (mode, pedal diagram,
-the 7 pedals, the bank, the Family Helper). **Motion** — everything that drives
-change over time (the governor, the CC / note triggers, both glissando engines).
+The editor has three tabs. **Harp** — the composing surface (mode, contour,
+pedal diagram, the 7 pedals, the bank, the Family Helper). **Motion** — what
+drives change over time (the governor, the CC / note triggers, both glissando
+engines). **Voicing** — the playability reduction (hands, polyphony, span).
 The status line at the bottom is always visible.
+
+## Contour mode  (Harp tab)
+
+`Pitch Mode` = **Contour** stops mapping exact pitches and instead keeps the
+input melody's **shape and rhythm**, re-drawing it on the current pedal
+diagram's degrees. A chromatic line through a whole-tone or hexachord diagram
+comes out as that scale with the same gesture — an instant, controllable
+"variation" of a line for a development section.
+
+- **step** — how far the output moves per input interval: *Tight* (scale-step
+  feel), *Literal* (1 degree per semitone — wide), *Compress*, *Expand*.
+- **chords** — *Monophonic* (a simultaneity keeps only its first note) or
+  *Stack* (the rest take the next lower diagram degrees).
+- **low / high note** — the register the contour is kept inside.
+
+Re-pedal mid-phrase and the line recolours. Black-key modes don't apply in
+Contour. Absolute mode is the normal transform.
+
+## Voicing  (Voicing tab)  —  off by default
+
+Turn **Voicing on** to reduce the input to what a harpist could physically
+grab. Notes are grouped by onset (**onset window ms** ≈ one hand placement) and
+each group is filtered:
+
+- **Hand** — Both / Left / Right. **Split** — how a chord is divided between the
+  hands: *Block* (this hand takes its half by pitch), *Interlock* (alternating
+  notes), *Channel* (the source already put the hands on separate MIDI
+  channels — set **Split channels L / R**), *Off*.
+- **Max voices** — notes kept per hand per placement (4 = a hand).
+- **Hand low / high note** + **out-of-range** — Drop / Fold an octave / Clamp.
+- **Max span** — the widest reach (16 semitones = a 10th). **Over-span**:
+  *Drop Widest*, *Fold* an outlier in, or *Roll* (fast strum). **Roll rate**
+  sets the strum spacing.
+- **Protect** — which notes survive when something has to go: *Keep Both Ends*
+  (bass + top, drop from the inside), *Keep Lowest*, *Keep Highest*, *None*.
+  Protect always wins over span.
+- **Output channel** — 0 keeps the source channel; set a value to tag all this
+  instance's output to one channel.
+
+### Two-instance left/right rig
+
+Load **two** OrchHarp instances on the harp track (or parallel tracks). Feed
+both the same MIDI **and** the same pedal automation / CC49. Set one to
+**Hand = Left**, the other **Hand = Right**, both to the same **Split** /
+**Max voices** / **Onset window**. The split is deterministic, so the two
+instances carve up every chord identically with no link between them. Tag
+**Output channel** 1 and 2, send both into OrchCapture → Dorico shows the harp
+part as two voices (up / down stems).
+
+Voicing off = the plugin behaves exactly as before.
 
 ## The pedal diagram
 

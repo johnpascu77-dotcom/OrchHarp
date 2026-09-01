@@ -95,6 +95,49 @@ namespace ohrp
     // hiStringIndex (lo may exceed hi for a descending contour).
     int mapContour (int ccValue, int loStringIndex, int hiStringIndex) noexcept;
 
+    // ---- Contour mode (Phase 3) -----------------------------------------
+    //
+    // Preserve a melody's *shape* and rhythm but re-quantise it to the current
+    // diagram's degrees: a chromatic line becomes a hexachord / whole-tone line
+    // with the same gesture. The output moves by whole string indices; the
+    // input interval only sets direction and how many degrees.
+
+    enum class ContourStep
+    {
+        Tight = 0,  // ~1 degree per 2 input semitones (scale-step feel)
+        Literal,    // 1 degree per input semitone
+        Compress,   // ~1 degree per 3 input semitones
+        Expand      // ~3 degrees per 2 input semitones
+    };
+
+    // Next absolute string index from the previous input note, the previous
+    // output string index, and the new input note. First note of a phrase:
+    // pass lastInputNote < 0 and it seeds by direction 0 (caller supplies the
+    // seed index as lastOutputStringIndex).
+    int contourNextIndex (int lastInputNote, int lastOutputStringIndex,
+                          int newInputNote, ContourStep step) noexcept;
+
+    // ---- Voicing (Phase 3) ---------------------------------------------
+    //
+    // Reduce one onset group (a "hand placement") to what a harpist could grab:
+    // a per-hand slice of the chord, a polyphony cap, and a span clamp - with
+    // the drops weighted by musical function (protect the outer voices, drop
+    // from the inside out).
+
+    struct VoiceConfig
+    {
+        int hand = 0;          // 0 Both, 1 Left, 2 Right
+        int splitMode = 0;     // 0 Off, 1 Block, 2 Interlock (Channel: caller pre-filters)
+        int maxVoices = 4;     // per group, for this hand
+        int maxSpanSemis = 16; // a 10th
+        int protect = 3;       // 0 None, 1 KeepLowest, 2 KeepHighest, 3 KeepBothEnds
+    };
+
+    // `sortedNotes` ascending (one onset group, already channel-filtered).
+    // Returns the surviving indices into it, ascending. Pure & deterministic,
+    // so two instances running it on the same group never disagree.
+    std::vector<int> selectVoices (const std::vector<int>& sortedNotes, const VoiceConfig& config);
+
     // Fit a pedal diagram onto an arbitrary target pitch-class set: every
     // set member should be sounded by some string, no string should sound
     // outside the set, then least pedal effort. For a 7-note set this is the

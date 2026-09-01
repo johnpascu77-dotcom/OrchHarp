@@ -85,6 +85,28 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     glissRunDirectionParam = parameters.getRawParameterValue ("glissRunDirection");
     glissRunDurationParam  = parameters.getRawParameterValue ("glissRunDuration");
 
+    pitchModeParam       = parameters.getRawParameterValue ("pitchMode");
+    contourStepParam     = parameters.getRawParameterValue ("contourStep");
+    contourChordsParam   = parameters.getRawParameterValue ("contourChords");
+    contourLoNoteParam   = parameters.getRawParameterValue ("contourLoNote");
+    contourHiNoteParam   = parameters.getRawParameterValue ("contourHiNote");
+
+    voicingEnableParam   = parameters.getRawParameterValue ("voicingEnable");
+    handParam            = parameters.getRawParameterValue ("hand");
+    splitModeParam       = parameters.getRawParameterValue ("splitMode");
+    splitChanLeftParam   = parameters.getRawParameterValue ("splitChanLeft");
+    splitChanRightParam  = parameters.getRawParameterValue ("splitChanRight");
+    maxVoicesParam       = parameters.getRawParameterValue ("maxVoices");
+    onsetWindowMsParam   = parameters.getRawParameterValue ("onsetWindowMs");
+    handLoNoteParam      = parameters.getRawParameterValue ("handLoNote");
+    handHiNoteParam      = parameters.getRawParameterValue ("handHiNote");
+    outOfRangeParam      = parameters.getRawParameterValue ("outOfRange");
+    maxSpanParam         = parameters.getRawParameterValue ("maxSpan");
+    overSpanParam        = parameters.getRawParameterValue ("overSpan");
+    rollRateParam        = parameters.getRawParameterValue ("rollRate");
+    protectParam         = parameters.getRawParameterValue ("protect");
+    outChannelParam      = parameters.getRawParameterValue ("outChannel");
+
     bankSlotInt = dynamic_cast<juce::AudioParameterInt*> (parameters.getParameter ("bankSlot"));
 
     resetBankToFactory();
@@ -191,6 +213,58 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "glissRunDuration", 1 }, "Gliss Run Duration",
         juce::StringArray { "1/16", "1/8", "1/4", "1/2", "1 bar" }, 2));
+
+    // ---- Contour mode (Phase 3) -----------------------------------------
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "pitchMode", 1 }, "Pitch Mode",
+        juce::StringArray { "Absolute", "Contour" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "contourStep", 1 }, "Contour Step",
+        juce::StringArray { "Tight", "Literal", "Compress", "Expand" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "contourChords", 1 }, "Contour Chords",
+        juce::StringArray { "Monophonic", "Stack" }, 1));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "contourLoNote", 1 }, "Contour Low Note", 0, 127, 24));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "contourHiNote", 1 }, "Contour High Note", 0, 127, 103));
+
+    // ---- Voicing (Phase 3) ---------------------------------------------
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "voicingEnable", 1 }, "Voicing", false));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "hand", 1 }, "Hand", juce::StringArray { "Both", "Left", "Right" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "splitMode", 1 }, "Split Mode",
+        juce::StringArray { "Off", "Block", "Interlock", "Channel" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "splitChanLeft", 1 }, "Split Channel Left", 1, 16, 1));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "splitChanRight", 1 }, "Split Channel Right", 1, 16, 2));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "maxVoices", 1 }, "Max Voices", 1, 12, 4));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "onsetWindowMs", 1 }, "Onset Window (ms)", 5, 200, 90));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "handLoNote", 1 }, "Hand Low Note", 0, 127, 24));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "handHiNote", 1 }, "Hand High Note", 0, 127, 103));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "outOfRange", 1 }, "Out Of Range",
+        juce::StringArray { "Drop", "Fold Octave", "Clamp" }, 1));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "maxSpan", 1 }, "Max Span (semitones)", 2, 36, 16));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "overSpan", 1 }, "Over Span",
+        juce::StringArray { "Drop Widest", "Fold", "Roll" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "rollRate", 1 }, "Roll Rate",
+        juce::StringArray { "1/64", "1/32", "1/16" }, 1));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "protect", 1 }, "Protect",
+        juce::StringArray { "None", "Keep Lowest", "Keep Highest", "Keep Both Ends" }, 3));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "outChannel", 1 }, "Output Channel (0 = source)", 0, 16, 0));
 
     return { params.begin(), params.end() };
 }
@@ -470,6 +544,13 @@ void OrchHarpAudioProcessor::resetNoteMap()
     glissIdleBeats = 0.0;
     lastGlissNoteUi.store (-1);
     glissActiveCountUi.store (0);
+
+    currentGroup.clear();
+    carriedGroup.clear();
+    currentGroupStartSample = 0;
+    lastContourInput = -1;
+    contourStackDepth = 0;
+    contourClusterPpq = -1.0e12;
 }
 
 // ---- Governor ---------------------------------------------------------
@@ -811,98 +892,111 @@ void OrchHarpAudioProcessor::drainPendingGliss (juce::MidiBuffer& output, double
                                    : (runLastNote >= 0 ? 1 : 0));
 }
 
-void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int samplePosition,
-                                           juce::MidiBuffer& output, double blockPpq, double ppqPerSample)
+int OrchHarpAudioProcessor::contourWindowLo() const
 {
-    const int channel = juce::jlimit (1, 16, message.getChannel());
-    const int inputNote = juce::jlimit (0, 127, message.getNoteNumber());
-    const auto velocity = message.getVelocity();
+    const int n = contourLoNoteParam != nullptr
+        ? juce::jlimit (0, 127, juce::roundToInt (contourLoNoteParam->load())) : 24;
+    return ohrp::noteToNearestStringIndex (n, soundingDiagram, kGlissBaseOctave);
+}
 
-    const auto track = [&] (int outNote)
+int OrchHarpAudioProcessor::contourWindowHi() const
+{
+    const int n = contourHiNoteParam != nullptr
+        ? juce::jlimit (0, 127, juce::roundToInt (contourHiNoteParam->load())) : 103;
+    return ohrp::noteToNearestStringIndex (n, soundingDiagram, kGlissBaseOctave);
+}
+
+OrchHarpAudioProcessor::ResolvedNote
+OrchHarpAudioProcessor::resolveNoteOn (const juce::MidiMessage& message, int samplePosition,
+                                      double blockPpq, double ppqPerSample)
+{
+    ResolvedNote r;
+    r.channel   = juce::jlimit (1, 16, message.getChannel());
+    r.inputNote = juce::jlimit (0, 127, message.getNoteNumber());
+    r.velocity  = message.getVelocity();
+    r.samplePos = samplePosition;
+
+    const int inputNote = r.inputNote;
+    const double eventPpq = blockPpq + samplePosition * ppqPerSample;
+
+    // Trigger-gesture glissando: a note in the zone is consumed and schedules a run.
+    if (tryStartTriggerRun (inputNote, r.velocity, eventPpq, ppqPerSample))
     {
-        if (activeNotes.size() >= 2048)
-            activeNotes.erase (activeNotes.begin());
-        activeNotes.push_back ({ channel, inputNote, outNote });
-    };
-
-    const auto emit = [&] (int outNote, int letter, int action)
-    {
-        track (outNote);
-        if (outNote == inputNote)
-            output.addEvent (message, samplePosition);
-        else
-            output.addEvent (juce::MidiMessage::noteOn (channel, outNote, velocity), samplePosition);
-
-        if (letter >= 0 && letter < 7)
-            stringQuietBeats[static_cast<size_t> (letter)] = 0.0;
-
-        lastInputNote.store (inputNote);
-        lastOutputNote.store (outNote);
-        lastOutputLetter.store (letter);
-        lastAction.store (action);
-    };
-
-    const auto drop = [&] (int action)
-    {
-        track (-1);
-        lastInputNote.store (inputNote);
-        lastOutputNote.store (-1);
-        lastOutputLetter.store (-1);
-        lastAction.store (action);
-    };
-
-    // Trigger-gesture glissando: a note in the trigger zone is consumed and
-    // sprays a scheduled run (design §9). Checked before white/black routing.
-    {
-        const double eventPpq = blockPpq + samplePosition * ppqPerSample;
-        if (tryStartTriggerRun (inputNote, velocity, eventPpq, ppqPerSample))
-        {
-            track (-1); // swallow this note-on and its matching note-off
-            lastInputNote.store (inputNote);
-            lastOutputNote.store (-1);
-            lastOutputLetter.store (-1);
-            lastAction.store (5); // trigger run
-            return;
-        }
+        r.consumed = true;
+        r.action = 5;
+        return r;
     }
 
-    const auto blackMode = static_cast<ohrp::BlackKeyMode> (
-        blackKeyModeParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (blackKeyModeParam->load())) : 0);
+    // Contour mode: shape, not pitch. Re-quantise the melodic gesture to the
+    // current diagram's degrees. Bypasses white/black routing entirely.
+    if (pitchModeParam != nullptr && pitchModeParam->load() >= 0.5f)
+    {
+        const auto step = static_cast<ohrp::ContourStep> (
+            contourStepParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (contourStepParam->load())) : 0);
+        const bool stack = contourChordsParam != nullptr && contourChordsParam->load() >= 0.5f;
+        const int lo = contourWindowLo();
+        const int hi = contourWindowHi();
 
-    // White key -> its string, same octave.
+        constexpr double kClusterBeats = 0.0625; // 1/64 note - a tight simultaneity
+        const bool inCluster = lastContourInput >= 0 && (eventPpq - contourClusterPpq) < kClusterBeats;
+
+        int idx;
+        if (inCluster)
+        {
+            if (! stack)
+            {
+                r.outputNote = -1; // Monophonic: the rest of the cluster is dropped
+                r.action = 3;
+                return r;
+            }
+            ++contourStackDepth;
+            idx = contourClusterTopIdx - contourStackDepth;
+        }
+        else
+        {
+            const int seed = lastContourInput < 0
+                ? ohrp::noteToNearestStringIndex (inputNote, soundingDiagram, kGlissBaseOctave)
+                : contourClusterTopIdx;
+            idx = ohrp::contourNextIndex (lastContourInput, seed, inputNote, step);
+            contourClusterTopIdx = idx;
+            contourStackDepth = 0;
+            contourClusterPpq = eventPpq;
+            lastContourInput = inputNote;
+        }
+
+        idx = juce::jlimit (juce::jmin (lo, hi), juce::jmax (lo, hi), idx);
+        r.outputNote = ohrp::stringIndexToNote (idx, soundingDiagram, kGlissBaseOctave);
+        r.letter = ((idx % 7) + 7) % 7;
+        r.action = 6;
+        return r;
+    }
+
+    // Absolute mode: white key -> its string.
     if (ohrp::isWhiteKey (inputNote))
     {
-        const int letter = ohrp::letterForWhiteKey (inputNote);
-        const int out = ohrp::whiteKeyToStringNote (inputNote, soundingDiagram);
-
-        // Same-string collision: a live note already sounds this pitch on this
-        // channel -> drop the later one (a section harpist has one string).
-        for (const auto& n : activeNotes)
-            if (n.channel == channel && n.outputNote == out)
-            {
-                drop (3);
-                return;
-            }
-
-        emit (out, letter, 1);
-        return;
+        r.letter = ohrp::letterForWhiteKey (inputNote);
+        r.outputNote = ohrp::whiteKeyToStringNote (inputNote, soundingDiagram);
+        r.action = 1;
+        return r;
     }
 
     // Black key.
+    const auto blackMode = static_cast<ohrp::BlackKeyMode> (
+        blackKeyModeParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (blackKeyModeParam->load())) : 0);
+
     switch (blackMode)
     {
         case ohrp::BlackKeyMode::Control:
         {
             if (tryConsumeControlNote (inputNote))
             {
-                drop (4); // consumed by the control zone (bank recall / step)
-                return;
+                r.outputNote = -1; // consumed by the control zone
+                r.action = 4;
+                return r;
             }
 
-            // Out-of-zone black key: the music's own accidental re-pedals the
-            // harp so its pitch class becomes playable, then sounds on that
-            // string. Subsequent naturals on that letter stay re-tuned until
-            // another change (the emergent Synchron-Harp behaviour, design §4).
+            // Out-of-zone accidental: re-pedal so its pitch class plays, then
+            // sound it on that string (emergent Synchron behaviour, design §4).
             const int p = ohrp::mod12 (inputNote);
             const int letter = ohrp::nearestStringIndex (p, soundingDiagram);
             const int base = ohrp::kLetterBaseSemitone[static_cast<size_t> (letter)];
@@ -919,20 +1013,20 @@ void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int
                     *pp = want;
             }
 
-            const int out = juce::jlimit (0, 127,
+            r.letter = letter;
+            r.outputNote = juce::jlimit (0, 127,
                 12 * (inputNote / 12) + ohrp::stringSemitone (letter, soundingDiagram));
-            emit (out, letter, 1);
-            return;
+            r.action = 1;
+            return r;
         }
 
         case ohrp::BlackKeyMode::Drop:
-            drop (3);
-            return;
+            r.outputNote = -1;
+            r.action = 3;
+            return r;
 
         case ohrp::BlackKeyMode::Nudge:
         {
-            // Bend the nearest pedal one notch toward the note, rate-limited by
-            // the governor interval, then sound it on the nearest string.
             const int letter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
             const int wantPc = ohrp::mod12 (inputNote);
             const int havePc = ohrp::stringPitchClass (letter, soundingDiagram);
@@ -943,7 +1037,7 @@ void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int
                 {
                     const int base = ohrp::kLetterBaseSemitone[static_cast<size_t> (letter)];
                     const int cur = ohrp::mod12 (base);
-                    const int up = ohrp::mod12 (wantPc - cur + 6) - 6; // signed shortest direction
+                    const int up = ohrp::mod12 (wantPc - cur + 6) - 6;
                     const int deltaOffset = up > 0 ? 1 : -1;
                     const int newIndex = juce::jlimit (0, 2, p->getIndex() + deltaOffset);
                     if (newIndex != p->getIndex())
@@ -951,27 +1045,192 @@ void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int
                 }
                 beatsSinceNudge = 0.0;
             }
-            const int out = ohrp::nearestStringNote (inputNote, soundingDiagram);
-            const int outLetter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
-            emit (out, outLetter, 2);
-            return;
+            r.outputNote = ohrp::nearestStringNote (inputNote, soundingDiagram);
+            r.letter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
+            r.action = 2;
+            return r;
         }
 
         case ohrp::BlackKeyMode::Nearest:
         default:
+            r.outputNote = ohrp::nearestStringNote (inputNote, soundingDiagram);
+            r.letter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
+            r.action = 2;
+            return r;
+    }
+}
+
+void OrchHarpAudioProcessor::emitResolved (const ResolvedNote& r, juce::MidiBuffer& output)
+{
+    const int forcedCh = outChannelParam != nullptr ? juce::jlimit (0, 16, juce::roundToInt (outChannelParam->load())) : 0;
+    const int outCh = forcedCh > 0 ? forcedCh : r.channel;
+
+    const auto track = [&] (int outNote)
+    {
+        if (activeNotes.size() >= 2048)
+            activeNotes.erase (activeNotes.begin());
+        activeNotes.push_back ({ r.channel, r.inputNote, outNote, outCh });
+    };
+
+    lastInputNote.store (r.inputNote);
+
+    if (r.consumed || r.outputNote < 0)
+    {
+        track (-1);
+        lastOutputNote.store (-1);
+        lastOutputLetter.store (-1);
+        lastAction.store (r.action);
+        return;
+    }
+
+    // Same-string collision: a live note already sounds this pitch on this out
+    // channel -> drop the later one (a section harpist has one string).
+    for (const auto& n : activeNotes)
+        if (n.outputChannel == outCh && n.outputNote == r.outputNote)
         {
-            const int out = ohrp::nearestStringNote (inputNote, soundingDiagram);
-            const int letter = ohrp::nearestStringIndex (ohrp::mod12 (inputNote), soundingDiagram);
-            for (const auto& n : activeNotes)
-                if (n.channel == channel && n.outputNote == out)
-                {
-                    drop (3);
-                    return;
-                }
-            emit (out, letter, 2);
+            track (-1);
+            lastOutputNote.store (-1);
+            lastOutputLetter.store (-1);
+            lastAction.store (3);
             return;
         }
+
+    track (r.outputNote);
+    output.addEvent (juce::MidiMessage::noteOn (outCh, r.outputNote, r.velocity), r.samplePos);
+
+    if (r.letter >= 0 && r.letter < 7)
+        stringQuietBeats[static_cast<size_t> (r.letter)] = 0.0;
+
+    lastOutputNote.store (r.outputNote);
+    lastOutputLetter.store (r.letter);
+    lastAction.store (r.action);
+}
+
+void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, juce::MidiBuffer& output,
+                                              double ppqPerSample, int numSamples)
+{
+    if (group.empty())
+        return;
+
+    auto swallow = [&] (ResolvedNote n)
+    {
+        n.outputNote = -1;
+        n.consumed = false;
+        emitResolved (n, output);
+    };
+
+    // Consumed / already-dropped entries pass straight through as swallows.
+    for (auto it = group.begin(); it != group.end(); )
+    {
+        if (it->consumed || it->outputNote < 0)
+        {
+            swallow (*it);
+            it = group.erase (it);
+        }
+        else ++it;
     }
+    if (group.empty()) { lastVoicedKept.store (0); lastVoicedSeen.store (0); return; }
+
+    const int hand      = handParam      != nullptr ? juce::jlimit (0, 2, juce::roundToInt (handParam->load())) : 0;
+    const int splitMode = splitModeParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (splitModeParam->load())) : 0;
+
+    // Channel split: notes for the other hand are swallowed here (their note-off
+    // reaches this instance too and must not leak through).
+    if (splitMode == 3 && hand != 0)
+    {
+        const int want = hand == 1
+            ? (splitChanLeftParam  != nullptr ? juce::jlimit (1, 16, juce::roundToInt (splitChanLeftParam->load()))  : 1)
+            : (splitChanRightParam != nullptr ? juce::jlimit (1, 16, juce::roundToInt (splitChanRightParam->load())) : 2);
+        for (auto it = group.begin(); it != group.end(); )
+        {
+            if (it->channel != want) { swallow (*it); it = group.erase (it); }
+            else ++it;
+        }
+        if (group.empty()) { lastVoicedKept.store (0); lastVoicedSeen.store (0); return; }
+    }
+
+    lastVoicedSeen.store (static_cast<int> (group.size()));
+
+    // Per-hand range: fold / clamp / drop.
+    const int hLo = handLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handLoNoteParam->load())) : 24;
+    const int hHi = handHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handHiNoteParam->load())) : 103;
+    const int oor = outOfRangeParam != nullptr ? juce::jlimit (0, 2, juce::roundToInt (outOfRangeParam->load())) : 1;
+    for (auto it = group.begin(); it != group.end(); )
+    {
+        int n = it->outputNote;
+        if (n >= hLo && n <= hHi) { ++it; continue; }
+
+        if (oor == 0) { swallow (*it); it = group.erase (it); continue; } // Drop
+        else if (oor == 2)                                                // Clamp
+            n = juce::jlimit (hLo, hHi, n);
+        else                                                             // Fold octaves toward the window
+        {
+            for (int guard = 0; guard < 11 && n < hLo && n + 12 <= 127; ++guard) n += 12;
+            for (int guard = 0; guard < 11 && n > hHi && n - 12 >= 0;   ++guard) n -= 12;
+        }
+        it->outputNote = juce::jlimit (0, 127, n);
+        ++it;
+    }
+    if (group.empty()) { lastVoicedKept.store (0); return; }
+
+    std::sort (group.begin(), group.end(),
+               [] (const ResolvedNote& a, const ResolvedNote& b) { return a.outputNote < b.outputNote; });
+
+    const int overSpan = overSpanParam != nullptr ? juce::jlimit (0, 2, juce::roundToInt (overSpanParam->load())) : 0;
+    const int maxSpan  = maxSpanParam  != nullptr ? juce::jlimit (2, 36, juce::roundToInt (maxSpanParam->load())) : 16;
+    const int rawSpan  = group.back().outputNote - group.front().outputNote;
+
+    // Fold: octave-fold outliers toward the median before selection.
+    if (overSpan == 1 && rawSpan > maxSpan)
+    {
+        const int mid = (group.front().outputNote + group.back().outputNote) / 2;
+        for (auto& n : group)
+        {
+            while (n.outputNote - mid > maxSpan / 2 && n.outputNote - 12 >= 0)   n.outputNote -= 12;
+            while (mid - n.outputNote > maxSpan / 2 && n.outputNote + 12 <= 127) n.outputNote += 12;
+        }
+        std::sort (group.begin(), group.end(),
+                   [] (const ResolvedNote& a, const ResolvedNote& b) { return a.outputNote < b.outputNote; });
+    }
+
+    std::vector<int> sortedNotes;
+    for (const auto& n : group) sortedNotes.push_back (n.outputNote);
+
+    ohrp::VoiceConfig cfg;
+    cfg.hand = hand;
+    cfg.splitMode = splitMode == 3 ? 0 : splitMode; // Channel already filtered
+    cfg.maxVoices = maxVoicesParam != nullptr ? juce::jlimit (1, 12, juce::roundToInt (maxVoicesParam->load())) : 4;
+    cfg.maxSpanSemis = overSpan == 0 ? maxSpan : 999; // Drop Widest only; Fold/Roll handled here
+    cfg.protect = protectParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (protectParam->load())) : 3;
+
+    const auto keptIdx = ohrp::selectVoices (sortedNotes, cfg);
+    lastVoicedKept.store (static_cast<int> (keptIdx.size()));
+
+    std::vector<bool> keep (group.size(), false);
+    for (int i : keptIdx) keep[static_cast<size_t> (i)] = true;
+
+    // Roll: if the group was too wide, arpeggiate the survivors instead of a block.
+    int staggerSamples = 0;
+    if (overSpan == 2 && rawSpan > maxSpan && keptIdx.size() > 1)
+    {
+        static const std::array<double, 3> kRollBeats { 0.0625, 0.125, 0.25 };
+        const int rr = rollRateParam != nullptr ? juce::jlimit (0, 2, juce::roundToInt (rollRateParam->load())) : 1;
+        const int want = ppqPerSample > 0.0 ? static_cast<int> (kRollBeats[static_cast<size_t> (rr)] / ppqPerSample) : 64;
+        const int room = juce::jmax (1, numSamples - 1 - group.front().samplePos);
+        staggerSamples = juce::jmin (want, room / juce::jmax (1, static_cast<int> (keptIdx.size()) - 1));
+    }
+
+    int rollStep = 0;
+    for (size_t i = 0; i < group.size(); ++i)
+    {
+        if (! keep[i]) { swallow (group[i]); continue; }
+        ResolvedNote n = group[i];
+        if (staggerSamples > 0)
+            n.samplePos = juce::jmin (numSamples - 1, n.samplePos + rollStep++ * staggerSamples);
+        emitResolved (n, output);
+    }
+
+    group.clear();
 }
 
 void OrchHarpAudioProcessor::handleNoteOff (const juce::MidiMessage& message, int samplePosition, juce::MidiBuffer& output)
@@ -989,15 +1248,16 @@ void OrchHarpAudioProcessor::handleNoteOff (const juce::MidiMessage& message, in
     }
 
     const int outputNote = it->outputNote;
+    const int outputChannel = it->outputChannel > 0 ? it->outputChannel : channel;
     activeNotes.erase (it);
 
     if (outputNote < 0)
         return; // matching note-on was dropped / consumed
 
-    if (outputNote == inputNote)
+    if (outputNote == inputNote && outputChannel == channel)
         output.addEvent (message, samplePosition);
     else
-        output.addEvent (juce::MidiMessage::noteOff (channel, outputNote, message.getVelocity()), samplePosition);
+        output.addEvent (juce::MidiMessage::noteOff (outputChannel, outputNote, message.getVelocity()), samplePosition);
 }
 
 // ---- processBlock ----------------------------------------------------
@@ -1042,12 +1302,19 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         // Release any ringing gliss notes into the untouched stream before we
         // bow out, so nothing hangs.
         flushGlissNotes (midiMessages, 0);
+        currentGroup.clear();
+        carriedGroup.clear();
         if (! activeNotes.empty())
             resetNoteMap();
         wasPlaying = playing;
         storeReadoutDiagrams (readRequestedDiagram());
         return;
     }
+
+    const bool voicing = voicingEnableParam != nullptr && voicingEnableParam->load() >= 0.5f;
+    const int onsetWindowSamples = juce::jmax (1, juce::roundToInt (
+        (onsetWindowMsParam != nullptr ? juce::jlimit (5, 200, juce::roundToInt (onsetWindowMsParam->load())) : 90)
+        * sampleRate / 1000.0));
 
     // Bank-slot recall: writing the slot's 7 offsets onto the pedal params.
     const int slot = bankSlotParam != nullptr
@@ -1083,6 +1350,21 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     wasPlaying = playing;
 
+    // A group held from the previous block emits first, at sample 0.
+    if (! carriedGroup.empty())
+    {
+        if (voicing)
+        {
+            for (auto& n : carriedGroup) n.samplePos = 0;
+            flushVoiceGroup (carriedGroup, output, ppqPerSample, numSamples);
+        }
+        else
+        {
+            for (auto& n : carriedGroup) { n.samplePos = 0; emitResolved (n, output); }
+        }
+        carriedGroup.clear();
+    }
+
     for (const auto metadata : midiMessages)
     {
         const auto message = metadata.getMessage();
@@ -1106,7 +1388,24 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (message.isNoteOn())
         {
-            handleNoteOn (message, samplePosition, output, blockStartPpq, ppqPerSample);
+            auto r = resolveNoteOn (message, samplePosition, blockStartPpq, ppqPerSample);
+
+            if (! voicing)
+            {
+                emitResolved (r, output);
+            }
+            else
+            {
+                if (! currentGroup.empty()
+                    && samplePosition - currentGroupStartSample > onsetWindowSamples)
+                {
+                    flushVoiceGroup (currentGroup, output, ppqPerSample, numSamples);
+                    currentGroup.clear();
+                }
+                if (currentGroup.empty())
+                    currentGroupStartSample = samplePosition;
+                currentGroup.push_back (r);
+            }
             continue;
         }
 
@@ -1125,6 +1424,22 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         }
 
         output.addEvent (message, samplePosition);
+    }
+
+    // Close the open onset group: emit it now, or carry it to the next block if
+    // it began within the onset window of the block end (so a DAW-sequenced
+    // chord groups correctly regardless of buffer size - max one block hold).
+    if (voicing && ! currentGroup.empty())
+    {
+        if (currentGroupStartSample > numSamples - onsetWindowSamples)
+        {
+            carriedGroup = std::move (currentGroup);
+        }
+        else
+        {
+            flushVoiceGroup (currentGroup, output, ppqPerSample, numSamples);
+        }
+        currentGroup.clear();
     }
 
     // Emit any scheduled trigger-run notes that fall in this block.

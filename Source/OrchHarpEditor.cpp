@@ -249,7 +249,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     styleLabel (subtitleLabel, 13.0f);
     addAndMakeVisible (subtitleLabel);
 
-    buildLabel.setText ("Build: Phase 1", juce::dontSendNotification);
+    buildLabel.setText ("Build: Phase 3", juce::dontSendNotification);
     buildLabel.setJustificationType (juce::Justification::centred);
     buildLabel.setColour (juce::Label::textColourId, juce::Colour::fromRGB (140, 160, 180));
     buildLabel.setFont (juce::FontOptions (11.0f));
@@ -598,6 +598,113 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     addAndMakeVisible (glissRunDurationBox);
     glissRunDurationAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDuration", glissRunDurationBox);
 
+    // ---- Contour mode (Harp tab) --------------------------------------
+    contourLabel.setText ("Contour", juce::dontSendNotification);
+    styleLabel (contourLabel, 13.0f, true);
+    addAndMakeVisible (contourLabel);
+    pitchModeBox.addItemList ({ "Absolute", "Contour" }, 1);
+    styleBox (pitchModeBox);
+    addAndMakeVisible (pitchModeBox);
+    pitchModeAttachment = std::make_unique<ComboBoxAttachment> (params, "pitchMode", pitchModeBox);
+    contourStepLabel.setText ("step / chords", juce::dontSendNotification);
+    styleLabel (contourStepLabel, 12.0f);
+    addAndMakeVisible (contourStepLabel);
+    contourStepBox.addItemList ({ "Tight", "Literal", "Compress", "Expand" }, 1);
+    styleBox (contourStepBox);
+    addAndMakeVisible (contourStepBox);
+    contourStepAttachment = std::make_unique<ComboBoxAttachment> (params, "contourStep", contourStepBox);
+    contourChordsBox.addItemList ({ "Monophonic", "Stack" }, 1);
+    styleBox (contourChordsBox);
+    addAndMakeVisible (contourChordsBox);
+    contourChordsAttachment = std::make_unique<ComboBoxAttachment> (params, "contourChords", contourChordsBox);
+    contourWinLabel.setText ("low / high note", juce::dontSendNotification);
+    styleLabel (contourWinLabel, 12.0f);
+    addAndMakeVisible (contourWinLabel);
+    initNoteIncDec (contourLoNoteSlider);
+    initNoteIncDec (contourHiNoteSlider);
+    addAndMakeVisible (contourLoNoteSlider);
+    addAndMakeVisible (contourHiNoteSlider);
+    contourLoNoteAttachment = std::make_unique<SliderAttachment> (params, "contourLoNote", contourLoNoteSlider);
+    contourHiNoteAttachment = std::make_unique<SliderAttachment> (params, "contourHiNote", contourHiNoteSlider);
+
+    // ---- Voicing tab ------------------------------------------------
+    voicingEnableButton.setButtonText ("Voicing on");
+    voicingEnableButton.setColour (juce::ToggleButton::textColourId, juce::Colours::white);
+    addAndMakeVisible (voicingEnableButton);
+    voicingEnableAttachment = std::make_unique<ButtonAttachment> (params, "voicingEnable", voicingEnableButton);
+
+    voicingHandLabel.setText ("Hand / split", juce::dontSendNotification);
+    styleLabel (voicingHandLabel, 12.0f);
+    addAndMakeVisible (voicingHandLabel);
+    handBox.addItemList ({ "Both", "Left", "Right" }, 1);
+    styleBox (handBox);
+    addAndMakeVisible (handBox);
+    handAttachment = std::make_unique<ComboBoxAttachment> (params, "hand", handBox);
+    splitModeBox.addItemList ({ "Off", "Block", "Interlock", "Channel" }, 1);
+    styleBox (splitModeBox);
+    addAndMakeVisible (splitModeBox);
+    splitModeAttachment = std::make_unique<ComboBoxAttachment> (params, "splitMode", splitModeBox);
+
+    voicingSplitLabel.setText ("Split channels L / R", juce::dontSendNotification);
+    styleLabel (voicingSplitLabel, 12.0f);
+    addAndMakeVisible (voicingSplitLabel);
+    initIncDec (splitChanLeftSlider, 1, 16);
+    initIncDec (splitChanRightSlider, 1, 16);
+    addAndMakeVisible (splitChanLeftSlider);
+    addAndMakeVisible (splitChanRightSlider);
+    splitChanLeftAttachment = std::make_unique<SliderAttachment> (params, "splitChanLeft", splitChanLeftSlider);
+    splitChanRightAttachment = std::make_unique<SliderAttachment> (params, "splitChanRight", splitChanRightSlider);
+
+    voicingCapLabel.setText ("Max voices / onset window ms", juce::dontSendNotification);
+    styleLabel (voicingCapLabel, 12.0f);
+    addAndMakeVisible (voicingCapLabel);
+    initIncDec (maxVoicesSlider, 1, 12);
+    initIncDec (onsetWindowSlider, 5, 200);
+    addAndMakeVisible (maxVoicesSlider);
+    addAndMakeVisible (onsetWindowSlider);
+    maxVoicesAttachment = std::make_unique<SliderAttachment> (params, "maxVoices", maxVoicesSlider);
+    onsetWindowAttachment = std::make_unique<SliderAttachment> (params, "onsetWindowMs", onsetWindowSlider);
+
+    voicingRangeLabel.setText ("Hand low / high note", juce::dontSendNotification);
+    styleLabel (voicingRangeLabel, 12.0f);
+    addAndMakeVisible (voicingRangeLabel);
+    initNoteIncDec (handLoNoteSlider);
+    initNoteIncDec (handHiNoteSlider);
+    addAndMakeVisible (handLoNoteSlider);
+    addAndMakeVisible (handHiNoteSlider);
+    handLoNoteAttachment = std::make_unique<SliderAttachment> (params, "handLoNote", handLoNoteSlider);
+    handHiNoteAttachment = std::make_unique<SliderAttachment> (params, "handHiNote", handHiNoteSlider);
+    outOfRangeBox.addItemList ({ "Drop", "Fold Octave", "Clamp" }, 1);
+    styleBox (outOfRangeBox);
+    addAndMakeVisible (outOfRangeBox);
+    outOfRangeAttachment = std::make_unique<ComboBoxAttachment> (params, "outOfRange", outOfRangeBox);
+
+    voicingSpanLabel.setText ("Max span / over-span / roll", juce::dontSendNotification);
+    styleLabel (voicingSpanLabel, 12.0f);
+    addAndMakeVisible (voicingSpanLabel);
+    initIncDec (maxSpanSlider, 2, 36);
+    addAndMakeVisible (maxSpanSlider);
+    maxSpanAttachment = std::make_unique<SliderAttachment> (params, "maxSpan", maxSpanSlider);
+    overSpanBox.addItemList ({ "Drop Widest", "Fold", "Roll" }, 1);
+    styleBox (overSpanBox);
+    addAndMakeVisible (overSpanBox);
+    overSpanAttachment = std::make_unique<ComboBoxAttachment> (params, "overSpan", overSpanBox);
+    rollRateBox.addItemList ({ "1/64", "1/32", "1/16" }, 1);
+    styleBox (rollRateBox);
+    addAndMakeVisible (rollRateBox);
+    rollRateAttachment = std::make_unique<ComboBoxAttachment> (params, "rollRate", rollRateBox);
+
+    voicingProtectLabel.setText ("Protect / output channel", juce::dontSendNotification);
+    styleLabel (voicingProtectLabel, 12.0f);
+    addAndMakeVisible (voicingProtectLabel);
+    protectBox.addItemList ({ "None", "Keep Lowest", "Keep Highest", "Keep Both Ends" }, 1);
+    styleBox (protectBox);
+    addAndMakeVisible (protectBox);
+    protectAttachment = std::make_unique<ComboBoxAttachment> (params, "protect", protectBox);
+    initIncDec (outChannelSlider, 0, 16);
+    addAndMakeVisible (outChannelSlider);
+    outChannelAttachment = std::make_unique<SliderAttachment> (params, "outChannel", outChannelSlider);
+
     statusLabel.setJustificationType (juce::Justification::centred);
     statusLabel.setColour (juce::Label::textColourId, kAmber);
     statusLabel.setFont (juce::FontOptions (12.0f, juce::Font::bold));
@@ -607,11 +714,13 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     tabs.setColour (juce::TabbedComponent::backgroundColourId, kBackground);
     tabs.setOutline (0);
     tabs.setTabBarDepth (28);
-    tabs.addTab ("Harp",   kBackground, &harpPanel,   false);
-    tabs.addTab ("Motion", kBackground, &motionPanel, false);
+    tabs.addTab ("Harp",    kBackground, &harpPanel,    false);
+    tabs.addTab ("Motion",  kBackground, &motionPanel,  false);
+    tabs.addTab ("Voicing", kBackground, &voicingPanel, false);
     addAndMakeVisible (tabs);
-    harpPanel.onLayout   = [this] { layoutHarpTab(); };
-    motionPanel.onLayout = [this] { layoutMotionTab(); };
+    harpPanel.onLayout    = [this] { layoutHarpTab(); };
+    motionPanel.onLayout  = [this] { layoutMotionTab(); };
+    voicingPanel.onLayout = [this] { layoutVoicingTab(); };
 
     auto reparent = [] (juce::Component& parent, std::initializer_list<juce::Component*> kids)
     {
@@ -621,12 +730,22 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
 
     reparent (harpPanel, {
         &modeLabel, &modeBox, &blackKeyModeLabel, &blackKeyModeBox,
+        &contourLabel, &pitchModeBox, &contourStepLabel, &contourStepBox, &contourChordsBox,
+        &contourWinLabel, &contourLoNoteSlider, &contourHiNoteSlider,
         &pedalDiagram, &pedalsLabel,
         &bankLabel, &helperLabel, &familyBox, &variantBox, &baseKeyBox,
         &helperSlotSlider, &helperWriteButton, &pcSetLabel, &pcSetEditor, &pcSetWriteButton });
     for (auto& l : pedalLetterLabels) harpPanel.addAndMakeVisible (l);
     for (auto& b : pedalBoxes)        harpPanel.addAndMakeVisible (b);
     for (auto& c : bankCells)         harpPanel.addAndMakeVisible (c);
+
+    reparent (voicingPanel, {
+        &voicingEnableButton, &voicingHandLabel, &handBox, &splitModeBox,
+        &voicingSplitLabel, &splitChanLeftSlider, &splitChanRightSlider,
+        &voicingCapLabel, &maxVoicesSlider, &onsetWindowSlider,
+        &voicingRangeLabel, &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox,
+        &voicingSpanLabel, &maxSpanSlider, &overSpanBox, &rollRateBox,
+        &voicingProtectLabel, &protectBox, &outChannelSlider });
 
     reparent (motionPanel, {
         &governorLabel, &playabilityButton, &minChangeIntervalBox,
@@ -647,8 +766,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     // Size last, so the first resized() runs with the tabs + all children in
     // place (the tab content panels lay out from resized()).
     setResizable (true, true);
-    setResizeLimits (780, 600, 1200, 950);
-    setSize (880, 720);
+    setResizeLimits (800, 620, 1240, 1000);
+    setSize (900, 760);
 
     startTimerHz (12);
 }
@@ -716,9 +835,28 @@ void OrchHarpAudioProcessorEditor::layoutHarpTab()
         blackKeyModeLabel.setBounds (row.removeFromLeft (78));
         blackKeyModeBox.setBounds (row.removeFromLeft (130));
     }
+    area.removeFromTop (6);
+    {
+        auto row = area.removeFromTop (26);
+        contourLabel.setBounds (row.removeFromLeft (60));
+        pitchModeBox.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (10);
+        contourStepLabel.setBounds (row.removeFromLeft (72));
+        contourStepBox.setBounds (row.removeFromLeft (100));
+        row.removeFromLeft (6);
+        contourChordsBox.setBounds (row.removeFromLeft (110));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        contourWinLabel.setBounds (row.removeFromLeft (100));
+        contourLoNoteSlider.setBounds (row.removeFromLeft (104));
+        row.removeFromLeft (6);
+        contourHiNoteSlider.setBounds (row.removeFromLeft (104));
+    }
     area.removeFromTop (8);
 
-    pedalDiagram.setBounds (area.removeFromTop (146));
+    pedalDiagram.setBounds (area.removeFromTop (140));
     area.removeFromTop (6);
 
     pedalsLabel.setBounds (area.removeFromTop (18));
@@ -871,6 +1009,68 @@ void OrchHarpAudioProcessorEditor::layoutMotionTab()
     }
 }
 
+void OrchHarpAudioProcessorEditor::layoutVoicingTab()
+{
+    auto area = voicingPanel.getLocalBounds().reduced (14, 12);
+    const int lblW = 210;
+    const int fld  = 108;
+
+    voicingEnableButton.setBounds (area.removeFromTop (26).removeFromLeft (140));
+    area.removeFromTop (8);
+
+    {
+        auto row = area.removeFromTop (26);
+        voicingHandLabel.setBounds (row.removeFromLeft (lblW));
+        handBox.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (8);
+        splitModeBox.setBounds (row.removeFromLeft (fld));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        voicingSplitLabel.setBounds (row.removeFromLeft (lblW));
+        splitChanLeftSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (8);
+        splitChanRightSlider.setBounds (row.removeFromLeft (fld));
+    }
+    area.removeFromTop (10);
+    {
+        auto row = area.removeFromTop (26);
+        voicingCapLabel.setBounds (row.removeFromLeft (lblW));
+        maxVoicesSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (8);
+        onsetWindowSlider.setBounds (row.removeFromLeft (fld));
+    }
+    area.removeFromTop (10);
+    {
+        auto row = area.removeFromTop (26);
+        voicingRangeLabel.setBounds (row.removeFromLeft (lblW));
+        handLoNoteSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (8);
+        handHiNoteSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (10);
+        outOfRangeBox.setBounds (row.removeFromLeft (110));
+    }
+    area.removeFromTop (10);
+    {
+        auto row = area.removeFromTop (26);
+        voicingSpanLabel.setBounds (row.removeFromLeft (lblW));
+        maxSpanSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (10);
+        overSpanBox.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (6);
+        rollRateBox.setBounds (row.removeFromLeft (80));
+    }
+    area.removeFromTop (10);
+    {
+        auto row = area.removeFromTop (26);
+        voicingProtectLabel.setBounds (row.removeFromLeft (lblW));
+        protectBox.setBounds (row.removeFromLeft (130));
+        row.removeFromLeft (10);
+        outChannelSlider.setBounds (row.removeFromLeft (fld));
+    }
+}
+
 void OrchHarpAudioProcessorEditor::timerCallback()
 {
     pedalDiagram.setDiagrams (audioProcessor.getSoundingDiagramForUi(),
@@ -895,6 +1095,28 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     glissRunDirectionBox.setEnabled (pedalMode);
     glissRunDurationBox.setEnabled (pedalMode);
 
+    // Contour controls only matter in Contour pitch mode.
+    const bool contour = audioProcessor.getParameters().getRawParameterValue ("pitchMode")->load() >= 0.5f;
+    for (juce::Component* c : std::initializer_list<juce::Component*> {
+             &contourStepBox, &contourChordsBox, &contourLoNoteSlider, &contourHiNoteSlider,
+             &contourStepLabel, &contourWinLabel })
+        c->setEnabled (pedalMode && contour);
+
+    // Voicing tab: grey everything unless enabled; split channels unless Channel.
+    const bool voicing = audioProcessor.getParameters().getRawParameterValue ("voicingEnable")->load() >= 0.5f;
+    const bool chanSplit = audioProcessor.getParameters().getRawParameterValue ("splitMode")->load() >= 2.5f;
+    const bool rolling = audioProcessor.getParameters().getRawParameterValue ("overSpan")->load() >= 1.5f;
+    for (juce::Component* c : std::initializer_list<juce::Component*> {
+             &handBox, &splitModeBox, &maxVoicesSlider, &onsetWindowSlider,
+             &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox, &maxSpanSlider,
+             &overSpanBox, &protectBox, &outChannelSlider,
+             &voicingHandLabel, &voicingCapLabel, &voicingRangeLabel, &voicingSpanLabel, &voicingProtectLabel })
+        c->setEnabled (voicing);
+    splitChanLeftSlider.setEnabled (voicing && chanSplit);
+    splitChanRightSlider.setEnabled (voicing && chanSplit);
+    voicingSplitLabel.setEnabled (voicing && chanSplit);
+    rollRateBox.setEnabled (voicing && rolling);
+
     refreshBankCells();
     updateStatus();
 }
@@ -917,6 +1139,8 @@ void OrchHarpAudioProcessorEditor::updateStatus()
             text << "(control)";
         else if (action == 5)
             text << "(gliss run)";
+        else if (action == 6)
+            text << noteName (out) << " (contour)";
         else
         {
             text << noteName (out);
@@ -939,6 +1163,13 @@ void OrchHarpAudioProcessorEditor::updateStatus()
     if (glissActive > 0 && glissNote >= 0)
         text << "   |   gliss " << noteName (glissNote)
              << " (" << glissActive << (glissActive == 1 ? " note)" : " ringing)");
+
+    if (audioProcessor.getParameters().getRawParameterValue ("voicingEnable")->load() >= 0.5f)
+    {
+        const int seen = audioProcessor.getVoicedSeenForUi();
+        if (seen > 0)
+            text << "   |   voiced " << audioProcessor.getVoicedKeptForUi() << "/" << seen;
+    }
 
     const int cc = audioProcessor.getLastCcForUi();
     if (cc >= 0)

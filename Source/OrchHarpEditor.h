@@ -70,11 +70,12 @@ private:
     void updateStatus();
     void layoutHarpTab();
     void layoutMotionTab();
+    void layoutVoicingTab();
 
     OrchHarpAudioProcessor& audioProcessor;
 
     juce::TabbedComponent tabs { juce::TabbedButtonBar::TabsAtTop };
-    LayoutPanel harpPanel, motionPanel;
+    LayoutPanel harpPanel, motionPanel, voicingPanel;
 
     juce::Label titleLabel, subtitleLabel, buildLabel;
 
@@ -119,6 +120,19 @@ private:
     juce::Slider glissTrigLoSlider, glissTrigHiSlider, glissRunLoNoteSlider, glissRunHiNoteSlider;
     juce::ComboBox glissRunDirectionBox, glissRunDurationBox;
 
+    // ---- Contour (Harp tab) ----
+    juce::Label contourLabel, contourStepLabel, contourWinLabel;
+    juce::ComboBox pitchModeBox, contourStepBox, contourChordsBox;
+    juce::Slider contourLoNoteSlider, contourHiNoteSlider;
+
+    // ---- Voicing tab ----
+    juce::Label voicingHandLabel, voicingSplitLabel, voicingCapLabel, voicingRangeLabel,
+                voicingSpanLabel, voicingProtectLabel;
+    juce::ToggleButton voicingEnableButton;
+    juce::ComboBox handBox, splitModeBox, outOfRangeBox, overSpanBox, rollRateBox, protectBox;
+    juce::Slider splitChanLeftSlider, splitChanRightSlider, maxVoicesSlider, onsetWindowSlider,
+                 handLoNoteSlider, handHiNoteSlider, maxSpanSlider, outChannelSlider;
+
     juce::Label statusLabel;
 
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -134,6 +148,16 @@ private:
     std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment;
     std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment, glissRunLoNoteAttachment, glissRunHiNoteAttachment;
     std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissReleaseAttachment, glissRunDirectionAttachment, glissRunDurationAttachment;
+
+    std::unique_ptr<ComboBoxAttachment> pitchModeAttachment, contourStepAttachment, contourChordsAttachment;
+    std::unique_ptr<SliderAttachment> contourLoNoteAttachment, contourHiNoteAttachment;
+
+    std::unique_ptr<ButtonAttachment> voicingEnableAttachment;
+    std::unique_ptr<ComboBoxAttachment> handAttachment, splitModeAttachment, outOfRangeAttachment,
+                                        overSpanAttachment, rollRateAttachment, protectAttachment;
+    std::unique_ptr<SliderAttachment> splitChanLeftAttachment, splitChanRightAttachment, maxVoicesAttachment,
+                                      onsetWindowAttachment, handLoNoteAttachment, handHiNoteAttachment,
+                                      maxSpanAttachment, outChannelAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OrchHarpAudioProcessorEditor)
 };

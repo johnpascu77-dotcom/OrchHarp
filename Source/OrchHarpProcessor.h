@@ -68,6 +68,8 @@ public:
     int  getMovesInTransitForUi() const { return movesInTransit.load(); }
     int  getLastGlissNoteForUi() const  { return lastGlissNoteUi.load(); }
     int  getGlissActiveCountForUi() const { return glissActiveCountUi.load(); }
+    int  getVoicedKeptForUi() const  { return lastVoicedKept; }
+    int  getVoicedSeenForUi() const  { return lastVoicedSeen; }
     ohrp::Diagram getSoundingDiagramForUi() const;
     ohrp::Diagram getRequestedDiagramForUi() const;
 
@@ -105,6 +107,28 @@ private:
     std::atomic<float>* glissRunDirectionParam = nullptr;
     std::atomic<float>* glissRunDurationParam = nullptr;
 
+    std::atomic<float>* pitchModeParam = nullptr;
+    std::atomic<float>* contourStepParam = nullptr;
+    std::atomic<float>* contourChordsParam = nullptr;
+    std::atomic<float>* contourLoNoteParam = nullptr;
+    std::atomic<float>* contourHiNoteParam = nullptr;
+
+    std::atomic<float>* voicingEnableParam = nullptr;
+    std::atomic<float>* handParam = nullptr;
+    std::atomic<float>* splitModeParam = nullptr;
+    std::atomic<float>* splitChanLeftParam = nullptr;
+    std::atomic<float>* splitChanRightParam = nullptr;
+    std::atomic<float>* maxVoicesParam = nullptr;
+    std::atomic<float>* onsetWindowMsParam = nullptr;
+    std::atomic<float>* handLoNoteParam = nullptr;
+    std::atomic<float>* handHiNoteParam = nullptr;
+    std::atomic<float>* outOfRangeParam = nullptr;
+    std::atomic<float>* maxSpanParam = nullptr;
+    std::atomic<float>* overSpanParam = nullptr;
+    std::atomic<float>* rollRateParam = nullptr;
+    std::atomic<float>* protectParam = nullptr;
+    std::atomic<float>* outChannelParam = nullptr;
+
     // Typed handles for guarded write-back from CC / bank recall / nudge.
     std::array<juce::AudioParameterChoice*, 7> pedalChoice { };
     juce::AudioParameterInt* bankSlotInt = nullptr;
@@ -119,11 +143,36 @@ private:
     // ---- Note tracking (ONF pattern) ----
     struct TrackedNote
     {
-        int channel = 0;      // 1..16
-        int inputNote = 0;    // 0..127
-        int outputNote = -1;  // emitted pitch, or -1 if dropped / consumed
+        int channel = 0;       // input channel, 1..16 (note-off is matched on this)
+        int inputNote = 0;     // 0..127
+        int outputNote = -1;   // emitted pitch, or -1 if dropped / consumed
+        int outputChannel = 0; // channel the note-on went out on (for the note-off)
     };
     std::vector<TrackedNote> activeNotes;
+
+    // ---- Voicing (Phase 3) ----
+    struct ResolvedNote
+    {
+        int channel = 1;
+        int inputNote = 0;
+        juce::uint8 velocity = 100;
+        int outputNote = -1;   // -1 = drop
+        int letter = -1;       // string letter 0..6, or -1
+        int action = 0;        // 0 none 1 string 2 nearest 3 dropped 4 control 5 trigger 6 contour
+        bool consumed = false; // swallow note-on AND note-off, emit nothing
+        int samplePos = 0;
+    };
+    std::vector<ResolvedNote> currentGroup;   // open onset group (voicing on)
+    std::vector<ResolvedNote> carriedGroup;   // held from the previous block
+    int currentGroupStartSample = 0;
+    std::atomic<int> lastVoicedKept { 0 };
+    std::atomic<int> lastVoicedSeen { 0 };
+
+    // ---- Contour mode state ----
+    int lastContourInput = -1;
+    int contourClusterTopIdx = 0;
+    int contourStackDepth = 0;
+    double contourClusterPpq = -1.0e12;
 
     // ---- Governor state ----
     // Timing is beat-accumulator based (not host-ppq compared) so a loop or a
@@ -188,9 +237,18 @@ private:
                             double ppqPerSample, int numSamples);
     void releaseIdleGlissNotes (juce::MidiBuffer& output, int samplePosition);
     void flushGlissNotes (juce::MidiBuffer& output, int samplePosition);
-    void handleNoteOn (const juce::MidiMessage& message, int samplePosition, juce::MidiBuffer& output,
-                       double blockPpq, double ppqPerSample);
+
+    // The pitch transform for one note-on, with side effects (trigger scheduling,
+    // re-pedal, nudge, contour state) but NO emission.
+    ResolvedNote resolveNoteOn (const juce::MidiMessage& message, int samplePosition,
+                                double blockPpq, double ppqPerSample);
+    void emitResolved (const ResolvedNote& r, juce::MidiBuffer& output);
+    void flushVoiceGroup (std::vector<ResolvedNote>& group, juce::MidiBuffer& output,
+                          double ppqPerSample, int numSamples);
     void handleNoteOff (const juce::MidiMessage& message, int samplePosition, juce::MidiBuffer& output);
+
+    int  contourWindowLo() const;
+    int  contourWindowHi() const;
 
     void storeReadoutDiagrams (const ohrp::Diagram& requested);
 

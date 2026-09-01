@@ -239,6 +239,77 @@ int main()
         checkInt (mapContour (127, 35, 0), 0,  "contour with lo>hi descends");
     }
 
+    // --- Contour mode ----------------------------------------------
+    {
+        // Rising chromatic input, Tight: ~1 degree per 2 semitones.
+        int idx = 20;
+        idx = contourNextIndex (60, idx, 62, ContourStep::Tight);  // +2 semitones -> +1
+        checkInt (idx, 21, "contour Tight: +2 semitones -> +1 degree");
+        idx = contourNextIndex (62, idx, 66, ContourStep::Tight);  // +4 -> +2
+        checkInt (idx, 23, "contour Tight: +4 semitones -> +2 degrees");
+
+        // Literal: 1 degree per semitone.
+        checkInt (contourNextIndex (60, 10, 63, ContourStep::Literal), 13, "contour Literal: +3 semitones -> +3 degrees");
+
+        // Direction reversal and the minimum-1 rule.
+        checkInt (contourNextIndex (60, 10, 61, ContourStep::Tight), 11, "contour Tight: +1 semitone still moves +1 degree");
+        checkInt (contourNextIndex (60, 10, 59, ContourStep::Tight), 9,  "contour Tight: -1 semitone -> -1 degree");
+
+        // Repeated input note -> no move.
+        checkInt (contourNextIndex (60, 10, 60, ContourStep::Literal), 10, "contour: repeated input note holds the degree");
+
+        // Seed (no previous input).
+        checkInt (contourNextIndex (-1, 7, 60, ContourStep::Tight), 7, "contour seed: returns the seed index");
+    }
+
+    // --- Voicing --------------------------------------------------
+    {
+        auto eq = [] (const std::vector<int>& got, const std::vector<int>& want) { return got == want; };
+
+        std::vector<int> chord4 { 48, 52, 55, 60 }; // C E G C
+
+        VoiceConfig block { };
+        block.splitMode = 1; block.maxVoices = 4; block.maxSpanSemis = 36;
+
+        block.hand = 1; // Left
+        check (eq (selectVoices (chord4, block), { 0, 1 }), "Block split, 4-note chord, Left -> lower 2");
+        block.hand = 2; // Right
+        check (eq (selectVoices (chord4, block), { 2, 3 }), "Block split, 4-note chord, Right -> upper 2");
+
+        std::vector<int> chord5 { 48, 52, 55, 59, 64 };
+        block.hand = 1;
+        check (eq (selectVoices (chord5, block), { 0, 1 }), "Block split, 5-note chord, Left -> lower 2 (floor)");
+        block.hand = 2;
+        check (eq (selectVoices (chord5, block), { 2, 3, 4 }), "Block split, 5-note chord, Right -> upper 3");
+
+        VoiceConfig inter { };
+        inter.splitMode = 2; inter.maxVoices = 4; inter.maxSpanSemis = 36;
+        inter.hand = 1;
+        check (eq (selectVoices (chord4, inter), { 0, 2 }), "Interlock, Left -> even indices");
+        inter.hand = 2;
+        check (eq (selectVoices (chord4, inter), { 1, 3 }), "Interlock, Right -> odd indices");
+
+        // Poly cap, protect both ends: drop from the inside.
+        VoiceConfig cap { };
+        cap.hand = 0; cap.splitMode = 0; cap.maxVoices = 3; cap.maxSpanSemis = 36; cap.protect = 3;
+        const auto capped = selectVoices (chord5, cap);
+        check (capped.size() == 3 && capped.front() == 0 && capped.back() == 4,
+               "poly cap 3, KeepBothEnds: keeps the two ends + one interior");
+
+        // Span clamp: 20-semitone spread, limit 16, both ends protected -> ends win.
+        std::vector<int> wide { 48, 55, 60, 68 }; // span 20
+        VoiceConfig sp { };
+        sp.hand = 0; sp.maxVoices = 12; sp.maxSpanSemis = 16; sp.protect = 3;
+        const auto spanned = selectVoices (wide, sp);
+        check (spanned.front() == 0 && spanned.back() == 3,
+               "span clamp with both ends protected: protect wins, ends kept");
+
+        // hand=Both ignores splitMode.
+        VoiceConfig both { };
+        both.hand = 0; both.splitMode = 1; both.maxVoices = 12; both.maxSpanSemis = 36;
+        check (selectVoices (chord4, both).size() == 4, "hand=Both keeps the whole group regardless of splitMode");
+    }
+
     std::cout << "-----------------------\n";
     if (failures == 0)
     {

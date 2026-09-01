@@ -13,8 +13,10 @@ is now a soft delay; contour `glissRelease` idle-release; gliss window limits
 are **real MIDI notes**; **editor split into Harp / Motion tabs** (was ~1065 px
 tall); out-of-zone black keys in Control mode now **re-pedal + sound** (emergent
 Synchron behaviour); bank Save re-labels the slot + right-click Save menu item.
-**Phase 2b** (pedal-change markers → OrchCapture) deprioritised — see §9. Usage
-walkthrough: `OrchHarp_UsageNotes.md`.
+**Phase 2b** (pedal-change markers → OrchCapture) deprioritised — see §9.
+**Phase 3 (function-weighted voicing + Contour pitch mode) built 2026-09-02** —
+see §12; 56 check assertions green; editor now Harp / Motion / Voicing tabs;
+"Build: Phase 3". Usage walkthrough: `OrchHarp_UsageNotes.md`.
 Repo: `C:\AudioDev\Repos\OrchHarp` (git initialised, no remote yet). GitHub
 `johnpascu77-dotcom/OrchHarp` (public, like the rest of the Orch family).
 Plugin code `Ohrp`, VST3, MIDI effect. Consumes the CC49/Harp slot reserved in
@@ -345,9 +347,10 @@ OrchCapture. Revisit only if that proves painful. Not building it for now.
 | Phase | What |
 |---|---|
 | **1 — transformer** ✅ | String model, white-key → string, black-key modes, Chromatic bypass, 7 pedal params + bank + family/variant helper, the playability governor, CC49 + black-key (direct + step) triggers, live diagram readout. Pure `OrchHarpPedalLogic` + `OrchHarpPedalLogicCheck`. Factory bank. Built + live-tested 2026-09-01. |
-| **2a — glissando engines** ✅ | Contour-follower gliss + trigger-gesture gliss. Built 2026-09-01, not yet live-tested. |
+| **2a — glissando engines** ✅ | Contour-follower gliss + trigger-gesture gliss. Built 2026-09-01. |
 | ~~**2b — notation**~~ | Pedal-change markers → OrchCapture. **Deprioritised** — user will derive pedal diagrams downstream in music21 if needed, not through OrchCapture. |
-| **later** | MC 2-CC diagram broadcast; harmonics / près-de-la-table as an articulation hint (probably OrchNoteMapper's job, not here). |
+| **3 — voicing + contour** ✅ | Function-weighted voicing (Hand L/R, poly cap, span→Roll, deterministic split, protect melody/bass, `outChannel` tag → Dorico voices) + Contour pitch mode (re-quantise a melody's shape to the diagram's degrees). Built 2026-09-02. See §12. |
+| **later** | MC 2-CC diagram broadcast; diagram drift + seed; bisbigliando; harmonics tag; humanize. |
 
 ## 11. Build
 
@@ -358,7 +361,50 @@ by hand or flip once elevated), a `juce_add_console_app` check target for
 `Source/OrchHarpProcessor.{h,cpp}`, `Source/OrchHarpEditor.{h,cpp}`,
 `Source/OrchHarpPedalLogic.{h,cpp}`, `Tools/OrchHarpPedalLogicCheck.cpp`.
 
-## 12. Open items for the build thread
+## 12. Phase 3 — voicing + contour (built 2026-09-02)
+
+Philosophy: `memory/project_orchharp_phase3_concept.md` — MC composes the field,
+the Orch chain orchestrates it, the user supervises. The two features are
+"make the reduction musical" and "generate a fresh variant".
+
+### Contour mode (`pitchMode = Contour`, Harp tab)
+
+Replaces the white/black transform. The input's melodic **shape and rhythm** are
+kept; each note re-quantises to a whole string index — `ohrp::contourNextIndex`
+takes direction from the input interval and magnitude from `contourStep`
+(Tight ≈ ½ degree/semitone · Literal 1 · Compress ⅓ · Expand 1½), min 1 degree
+when the input moves. Clamped to `contourLoNote..contourHiNote` (as string
+indices vs the current diagram — re-pedalling recolours the line). A tight
+time-cluster (< 1/64) is one "chord": `contourChords` = Monophonic (drop the
+rest) / Stack (next lower diagram degrees). Bypasses black-key handling.
+
+### Voicing (`voicingEnable`, Voicing tab)
+
+Off by default → zero behaviour change. On → note-ons are grouped by onset
+(`onsetWindowMs`, a group held at the block edge carries one block so DAW chords
+group cleanly regardless of buffer size) and each group runs `ohrp::selectVoices`:
+
+1. **Split** — `Hand` (Both/Left/Right) × `splitMode`: *Block* (left = lower
+   floor(k/2)), *Interlock* (left = even indices), *Channel* (`splitChanLeft/Right`,
+   filtered before selection — source is pre-separated), *Off*. Pure &
+   deterministic, so **two instances (one Left, one Right, same MIDI + pedal
+   CCs) split every chord identically with no IPC**.
+2. **Range** — `handLoNote..handHiNote`, `outOfRange` Drop / Fold-octave / Clamp.
+3. **Poly cap** — `maxVoices` per group; drop the note nearest the median,
+   never a protected end.
+4. **Span** — `maxSpan` (a 10th); `overSpan` = *Drop Widest* (selectVoices drops
+   the furthest-from-anchor non-protected note) / *Fold* (octave-fold outliers
+   toward the median before selection) / *Roll* (emit the survivors as a fast
+   in-block arpeggio, `rollRate` spacing).
+5. **Protect** — None / Keep Lowest / Keep Highest / Keep Both Ends. **Protect
+   wins over span** — if the protected notes alone exceed it, they stay.
+
+`outChannel` (0 = source) tags all output to one channel → two instances land on
+Dorico voices 1 / 2 (up / down stems). Note-offs follow the tagged channel
+(`TrackedNote.outputChannel`). Roll is in-block only — a fast strum, not a slow
+spread; use the trigger-gliss engine for that.
+
+## 13. Open items for the build thread
 
 Phase 1 resolutions (2026-09-01):
 
