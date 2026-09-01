@@ -209,6 +209,8 @@ void BankCellComponent::mouseDown (const juce::MouseEvent& e)
     if (e.mods.isPopupMenu())
     {
         juce::PopupMenu m;
+        m.addItem (3, "Save current diagram here");
+        m.addSeparator();
         m.addItem (1, "Rename...");
         m.addItem (2, "Recolour...");
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
@@ -216,11 +218,12 @@ void BankCellComponent::mouseDown (const juce::MouseEvent& e)
             {
                 if (r == 1 && onRename)   onRename();
                 if (r == 2 && onRecolour) onRecolour();
+                if (r == 3 && onSave)     onSave();
             });
         return;
     }
 
-    if (e.mods.isShiftDown())
+    if (e.mods.isShiftDown() || e.mods.isCtrlDown() || e.mods.isAltDown())
     {
         if (onSave) onSave();
         return;
@@ -235,8 +238,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
     setResizable (true, true);
-    setResizeLimits (700, 880, 1200, 1360);
-    setSize (820, 1065);
+    setResizeLimits (780, 600, 1200, 950);
+    setSize (880, 720);
 
     auto& params = audioProcessor.getParameters();
 
@@ -320,7 +323,14 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     {
         auto& cell = bankCells[static_cast<size_t> (i)];
         cell.onRecall = [this, i] { audioProcessor.recallBankSlot (i); };
-        cell.onSave   = [this, i] { audioProcessor.saveCurrentDiagramToSlot (i); refreshBankCells(); };
+        cell.onSave   = [this, i]
+        {
+            // Save the current diagram and re-label the slot with its spelling,
+            // so the save is visibly confirmed.
+            audioProcessor.setBankSlot (i, audioProcessor.getRequestedDiagramForUi(),
+                                        diagramText (audioProcessor.getRequestedDiagramForUi()));
+            refreshBankCells();
+        };
         cell.onRename = [this, i]
         {
             auto* aw = new juce::AlertWindow ("Rename slot " + juce::String (i + 1),
@@ -597,6 +607,44 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     statusLabel.setFont (juce::FontOptions (12.0f, juce::Font::bold));
     addAndMakeVisible (statusLabel);
 
+    // ---- Split the controls across two tabs (the panel is tall otherwise) ----
+    tabs.setColour (juce::TabbedComponent::backgroundColourId, kBackground);
+    tabs.setOutline (0);
+    tabs.setTabBarDepth (28);
+    tabs.addTab ("Harp",   kBackground, &harpPanel,   false);
+    tabs.addTab ("Motion", kBackground, &motionPanel, false);
+    addAndMakeVisible (tabs);
+    harpPanel.onLayout   = [this] { layoutHarpTab(); };
+    motionPanel.onLayout = [this] { layoutMotionTab(); };
+
+    auto reparent = [] (juce::Component& parent, std::initializer_list<juce::Component*> kids)
+    {
+        for (auto* k : kids)
+            parent.addAndMakeVisible (*k);
+    };
+
+    reparent (harpPanel, {
+        &modeLabel, &modeBox, &blackKeyModeLabel, &blackKeyModeBox,
+        &pedalDiagram, &pedalsLabel,
+        &bankLabel, &helperLabel, &familyBox, &variantBox, &baseKeyBox,
+        &helperSlotSlider, &helperWriteButton, &pcSetLabel, &pcSetEditor, &pcSetWriteButton });
+    for (auto& l : pedalLetterLabels) harpPanel.addAndMakeVisible (l);
+    for (auto& b : pedalBoxes)        harpPanel.addAndMakeVisible (b);
+    for (auto& c : bankCells)         harpPanel.addAndMakeVisible (c);
+
+    reparent (motionPanel, {
+        &governorLabel, &playabilityButton, &minChangeIntervalBox,
+        &changesAtRestsOnlyButton, &avoidRingingButton,
+        &triggersLabel, &ccBankLabel, &ccBankSlider, &ccChannelLabel, &ccChannelSlider,
+        &ctrlDirectLabel, &ctrlDirectLoSlider, &ctrlDirectHiSlider,
+        &ctrlStepLabel, &ctrlStepDownSlider, &ctrlStepUpSlider,
+        &contourGlissLabel, &glissCcLabel, &glissCcSlider, &glissNoteRangeLabel,
+        &glissLoNoteSlider, &glissHiNoteSlider, &glissVelLabel, &glissVelCcSlider,
+        &glissVelocitySlider, &glissRingBox, &glissReleaseBox,
+        &triggerGlissLabel, &glissTrigZoneLabel, &glissTrigLoSlider, &glissTrigHiSlider,
+        &glissRunWindowLabel, &glissRunLoNoteSlider, &glissRunHiNoteSlider,
+        &glissRunDirLabel, &glissRunDirectionBox, &glissRunDurationBox });
+
     refreshBankCells();
     updateStatus();
     startTimerHz (12);
@@ -640,12 +688,22 @@ void OrchHarpAudioProcessorEditor::paint (juce::Graphics& g)
 
 void OrchHarpAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().reduced (20, 14);
+    auto area = getLocalBounds().reduced (14, 12);
 
-    titleLabel.setBounds (area.removeFromTop (30));
-    subtitleLabel.setBounds (area.removeFromTop (16));
-    buildLabel.setBounds (area.removeFromTop (14));
-    area.removeFromTop (8);
+    titleLabel.setBounds (area.removeFromTop (28));
+    subtitleLabel.setBounds (area.removeFromTop (15));
+    buildLabel.setBounds (area.removeFromTop (13));
+    area.removeFromTop (6);
+
+    statusLabel.setBounds (area.removeFromBottom (22));
+    area.removeFromBottom (4);
+
+    tabs.setBounds (area);
+}
+
+void OrchHarpAudioProcessorEditor::layoutHarpTab()
+{
+    auto area = harpPanel.getLocalBounds().reduced (14, 10);
 
     {
         auto row = area.removeFromTop (26);
@@ -657,17 +715,17 @@ void OrchHarpAudioProcessorEditor::resized()
     }
     area.removeFromTop (8);
 
-    pedalDiagram.setBounds (area.removeFromTop (150));
+    pedalDiagram.setBounds (area.removeFromTop (146));
     area.removeFromTop (6);
 
     pedalsLabel.setBounds (area.removeFromTop (18));
     {
-        auto row = area.removeFromTop (48);
+        auto row = area.removeFromTop (46);
         const int w = row.getWidth() / 7;
         for (int i = 0; i < 7; ++i)
         {
             auto col = row.removeFromLeft (w).reduced (3, 0);
-            pedalLetterLabels[static_cast<size_t> (i)].setBounds (col.removeFromTop (16));
+            pedalLetterLabels[static_cast<size_t> (i)].setBounds (col.removeFromTop (15));
             pedalBoxes[static_cast<size_t> (i)].setBounds (col.removeFromTop (26));
         }
     }
@@ -675,17 +733,17 @@ void OrchHarpAudioProcessorEditor::resized()
 
     bankLabel.setBounds (area.removeFromTop (18));
     {
-        auto grid = area.removeFromTop (2 * 26 + 4);
+        auto grid = area.removeFromTop (2 * 28 + 4);
         for (int rowIdx = 0; rowIdx < 2; ++rowIdx)
         {
-            auto row = grid.removeFromTop (26);
+            auto row = grid.removeFromTop (28);
             const int w = row.getWidth() / 6;
             for (int col = 0; col < 6; ++col)
                 bankCells[static_cast<size_t> (rowIdx * 6 + col)].setBounds (row.removeFromLeft (w));
             grid.removeFromTop (4);
         }
     }
-    area.removeFromTop (8);
+    area.removeFromTop (10);
 
     helperLabel.setBounds (area.removeFromTop (18));
     {
@@ -694,114 +752,120 @@ void OrchHarpAudioProcessorEditor::resized()
         row.removeFromLeft (6);
         variantBox.setBounds (row.removeFromLeft (150));
         row.removeFromLeft (6);
-        baseKeyBox.setBounds (row.removeFromLeft (60));
+        baseKeyBox.setBounds (row.removeFromLeft (56));
         row.removeFromLeft (6);
-        helperSlotSlider.setBounds (row.removeFromLeft (110));
+        helperSlotSlider.setBounds (row.removeFromLeft (100));
         row.removeFromLeft (6);
         helperWriteButton.setBounds (row.removeFromLeft (110));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        pcSetLabel.setBounds (row.removeFromLeft (200));
+        pcSetLabel.setBounds (row.removeFromLeft (190));
         pcSetEditor.setBounds (row.removeFromLeft (170));
         row.removeFromLeft (8);
-        pcSetWriteButton.setBounds (row.removeFromLeft (120));
+        pcSetWriteButton.setBounds (row.removeFromLeft (110));
     }
-    area.removeFromTop (10);
+}
+
+void OrchHarpAudioProcessorEditor::layoutMotionTab()
+{
+    auto area = motionPanel.getLocalBounds().reduced (14, 10);
+
+    const int lblW = 190;
+    const int noteW = 108;
 
     governorLabel.setBounds (area.removeFromTop (18));
     {
         auto row = area.removeFromTop (26);
-        playabilityButton.setBounds (row.removeFromLeft (70));
-        row.removeFromLeft (10);
-        minChangeIntervalBox.setBounds (row.removeFromLeft (110));
-        row.removeFromLeft (16);
-        changesAtRestsOnlyButton.setBounds (row.removeFromLeft (180));
-        avoidRingingButton.setBounds (row.removeFromLeft (210));
+        playabilityButton.setBounds (row.removeFromLeft (68));
+        row.removeFromLeft (8);
+        minChangeIntervalBox.setBounds (row.removeFromLeft (104));
+        row.removeFromLeft (14);
+        changesAtRestsOnlyButton.setBounds (row.removeFromLeft (170));
+        avoidRingingButton.setBounds (row.removeFromLeft (200));
     }
     area.removeFromTop (10);
 
     triggersLabel.setBounds (area.removeFromTop (18));
     {
         auto row = area.removeFromTop (26);
-        ccBankLabel.setBounds (row.removeFromLeft (200));
-        ccBankSlider.setBounds (row.removeFromLeft (110));
+        ccBankLabel.setBounds (row.removeFromLeft (lblW));
+        ccBankSlider.setBounds (row.removeFromLeft (noteW));
         row.removeFromLeft (16);
-        ccChannelLabel.setBounds (row.removeFromLeft (130));
-        ccChannelSlider.setBounds (row.removeFromLeft (110));
+        ccChannelLabel.setBounds (row.removeFromLeft (120));
+        ccChannelSlider.setBounds (row.removeFromLeft (noteW));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        ctrlDirectLabel.setBounds (row.removeFromLeft (200));
-        ctrlDirectLoSlider.setBounds (row.removeFromLeft (110));
+        ctrlDirectLabel.setBounds (row.removeFromLeft (lblW));
+        ctrlDirectLoSlider.setBounds (row.removeFromLeft (noteW));
         row.removeFromLeft (8);
-        ctrlDirectHiSlider.setBounds (row.removeFromLeft (110));
+        ctrlDirectHiSlider.setBounds (row.removeFromLeft (noteW));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        ctrlStepLabel.setBounds (row.removeFromLeft (200));
-        ctrlStepDownSlider.setBounds (row.removeFromLeft (110));
+        ctrlStepLabel.setBounds (row.removeFromLeft (lblW));
+        ctrlStepDownSlider.setBounds (row.removeFromLeft (noteW));
         row.removeFromLeft (8);
-        ctrlStepUpSlider.setBounds (row.removeFromLeft (110));
+        ctrlStepUpSlider.setBounds (row.removeFromLeft (noteW));
     }
-    area.removeFromTop (10);
+    area.removeFromTop (12);
 
     contourGlissLabel.setBounds (area.removeFromTop (18));
     {
         auto row = area.removeFromTop (26);
-        glissCcLabel.setBounds (row.removeFromLeft (160));
-        glissCcSlider.setBounds (row.removeFromLeft (96));
-        row.removeFromLeft (24);
-        glissNoteRangeLabel.setBounds (row.removeFromLeft (130));
-        glissLoNoteSlider.setBounds (row.removeFromLeft (104));
-        row.removeFromLeft (6);
-        glissHiNoteSlider.setBounds (row.removeFromLeft (104));
+        glissCcLabel.setBounds (row.removeFromLeft (lblW));
+        glissCcSlider.setBounds (row.removeFromLeft (noteW));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        glissVelLabel.setBounds (row.removeFromLeft (210));
-        glissVelCcSlider.setBounds (row.removeFromLeft (90));
-        row.removeFromLeft (6);
-        glissVelocitySlider.setBounds (row.removeFromLeft (90));
-        row.removeFromLeft (10);
-        glissRingBox.setBounds (row.removeFromLeft (110));
-        row.removeFromLeft (6);
-        glissReleaseBox.setBounds (row.removeFromLeft (90));
+        glissNoteRangeLabel.setBounds (row.removeFromLeft (lblW));
+        glissLoNoteSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (8);
+        glissHiNoteSlider.setBounds (row.removeFromLeft (noteW));
     }
-    area.removeFromTop (10);
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        glissVelLabel.setBounds (row.removeFromLeft (lblW));
+        glissVelCcSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (8);
+        glissVelocitySlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (12);
+        glissRingBox.setBounds (row.removeFromLeft (108));
+        row.removeFromLeft (6);
+        glissReleaseBox.setBounds (row.removeFromLeft (88));
+    }
+    area.removeFromTop (12);
 
     triggerGlissLabel.setBounds (area.removeFromTop (18));
     {
         auto row = area.removeFromTop (26);
-        glissTrigZoneLabel.setBounds (row.removeFromLeft (210));
-        glissTrigLoSlider.setBounds (row.removeFromLeft (104));
-        row.removeFromLeft (6);
-        glissTrigHiSlider.setBounds (row.removeFromLeft (104));
+        glissTrigZoneLabel.setBounds (row.removeFromLeft (lblW));
+        glissTrigLoSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (8);
+        glissTrigHiSlider.setBounds (row.removeFromLeft (noteW));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        glissRunWindowLabel.setBounds (row.removeFromLeft (210));
-        glissRunLoNoteSlider.setBounds (row.removeFromLeft (104));
-        row.removeFromLeft (6);
-        glissRunHiNoteSlider.setBounds (row.removeFromLeft (104));
+        glissRunWindowLabel.setBounds (row.removeFromLeft (lblW));
+        glissRunLoNoteSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (8);
+        glissRunHiNoteSlider.setBounds (row.removeFromLeft (noteW));
     }
     area.removeFromTop (4);
     {
         auto row = area.removeFromTop (26);
-        glissRunDirLabel.setBounds (row.removeFromLeft (250));
+        glissRunDirLabel.setBounds (row.removeFromLeft (240));
         glissRunDirectionBox.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (8);
         glissRunDurationBox.setBounds (row.removeFromLeft (100));
     }
-
-    auto footer = getLocalBounds().reduced (20, 0);
-    footer.removeFromBottom (10);
-    statusLabel.setBounds (footer.removeFromBottom (22));
 }
 
 void OrchHarpAudioProcessorEditor::timerCallback()

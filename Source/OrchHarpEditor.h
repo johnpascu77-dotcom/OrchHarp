@@ -44,6 +44,15 @@ private:
     bool isActive = false;
 };
 
+// A plain panel whose layout is delegated back to the editor via a lambda, so
+// the editor can keep all its controls as members and just split resized().
+class LayoutPanel final : public juce::Component
+{
+public:
+    std::function<void()> onLayout;
+    void resized() override { if (onLayout) onLayout(); }
+};
+
 class OrchHarpAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                            private juce::Timer
 {
@@ -59,8 +68,13 @@ private:
     void refreshBankCells();
     void rebuildVariantBox();
     void updateStatus();
+    void layoutHarpTab();
+    void layoutMotionTab();
 
     OrchHarpAudioProcessor& audioProcessor;
+
+    juce::TabbedComponent tabs { juce::TabbedButtonBar::TabsAtTop };
+    LayoutPanel harpPanel, motionPanel;
 
     juce::Label titleLabel, subtitleLabel, buildLabel;
 

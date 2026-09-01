@@ -7,11 +7,12 @@ visual editor with the real harp pedal-diagram readout; live-tested in Bitwig,
 engines (contour-follower + trigger-gesture), 40 check assertions green, VST3
 clean (VS 18 2026 / JUCE `C:/JUCE/JUCE`). Contour engine + pedal-run recolouring
 confirmed live 2026-09-01. Post-test revisions same day: click-to-edit on the
-pedal diagram; Family-Helper + PC-set writes now name the slot;
-**governor timing moved to beat accumulators** (a loop region no longer wedges
-it); contour `glissRelease` idle-release so the last run note ends;
-gliss window limits are now **real MIDI notes** (Low/High Note), base-octave /
-run-span / run-anchor knobs dropped, contour and trigger have separate windows.
+pedal diagram; Family-Helper + PC-set writes name the slot; **governor timing
+moved to beat accumulators** (a loop region no longer wedges it); avoid-ringing
+is now a soft delay; contour `glissRelease` idle-release; gliss window limits
+are **real MIDI notes**; **editor split into Harp / Motion tabs** (was ~1065 px
+tall); out-of-zone black keys in Control mode now **re-pedal + sound** (emergent
+Synchron behaviour); bank Save re-labels the slot + right-click Save menu item.
 **Phase 2b** (pedal-change markers → OrchCapture) deprioritised — see §9. Usage
 walkthrough: `OrchHarp_UsageNotes.md`.
 Repo: `C:\AudioDev\Repos\OrchHarp` (git initialised, no remote yet). GitHub
@@ -98,9 +99,13 @@ string pitches **may collide** (`E♯` and `F♮` both = F): that is the harpist
   keyboard both drive it the same way.
 
 - **Black-key input** (C♯ D♯ F♯ G♯ A♯) → per `blackKeyMode` param:
-  - **Control** (default) — the note is consumed and routed to the control zone
-    (§7): recall / step a bank slot. Feed a chromatic sonata and its accidentals
-    re-pedal the harp on the fly — the emergent Synchron-style behaviour.
+  - **Control** (default) — a black key **in a ctrl zone** (§7) is consumed:
+    recall / step a bank slot. A black key **outside** any ctrl zone re-pedals
+    its nearest letter so its pitch class plays, and sounds on that string
+    (immediate, not governed) — subsequent naturals on that letter keep the
+    re-tuned pitch. Feed a chromatic sonata and it re-pedals itself: the
+    emergent Synchron-style behaviour. *(Built 2026-09-01. Earlier builds
+    swallowed out-of-zone black keys.)*
   - **Nearest string** — the note sounds, snapped to the nearest string pitch in
     the current diagram (clean transform, no note loss). Uses
     `nearestStringIndex`.

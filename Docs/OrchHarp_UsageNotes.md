@@ -11,6 +11,11 @@ note source (MPL / clip / Dorico-exported MIDI) -> [Randomize] -> OrchHarp -> Or
 
 ---
 
+The editor has two tabs. **Harp** — the composing surface (mode, pedal diagram,
+the 7 pedals, the bank, the Family Helper). **Motion** — everything that drives
+change over time (the governor, the CC / note triggers, both glissando engines).
+The status line at the bottom is always visible.
+
 ## The pedal diagram
 
 The seven strokes are the harp's seven pedals, in the real board order
@@ -34,8 +39,10 @@ Each slot holds a full pedal diagram (7 offsets) plus a name and a colour.
 - **Click** a slot — recall it. Writes the 7 pedal params, so the diagram and
   combos jump to that slot. This is also what `bankSlot` automation and the
   CC / black-key triggers do.
-- **Shift-click** a slot — save the **current** diagram into it.
-- **Right-click** a slot — Rename… / Recolour….
+- **Shift-click** (or Ctrl / Alt-click) a slot — save the **current** diagram
+  into it. The slot re-labels itself with the spelling so you can see it took.
+- **Right-click** a slot — *Save current diagram here* / Rename… / Recolour…
+  (the menu Save is a reliable alternative if your host eats modifier-clicks).
 
 The factory bank ships filled with the common glissando starting points (major,
 the three minors, whole-tone, the pentatonics, both octatonics, quartal, two
@@ -87,9 +94,10 @@ Off = pedals follow your changes instantly (Synchron-Harp chaos). On = the
   4/4 assumed).
 - **Changes at rests only** — hold every move until nothing is sounding on the
   track.
-- **Avoid ringing pedal change** — skip, this move, any pedal whose string
-  sounded in the last interval (buzz avoidance; irrelevant to the notated
-  result).
+- **Avoid ringing pedal change** — delay a move on a pedal whose string sounded
+  in the last interval (buzz avoidance; irrelevant to the notated result). It's
+  a *soft* delay — once a move is well overdue it goes through anyway, so a
+  dense passage can't freeze the governor.
 
 Foot rules are automatic: at most one of `{B,C,D}` and one of `{E,F,G,A}` per
 move. A flat↔sharp swing on one pedal takes two moves in this build.
@@ -110,8 +118,12 @@ you've dialled in — you set the pedals during the rest, then play.
 - **Ctrl step down / up note** (default 12 / 13) — one note steps `bankSlot` −1 /
   +1. Good for an LFO or ramp walking the bank, or a stepper pedal.
 
-Feed a chromatic sonata with **Black Keys = Control** and its accidentals
-re-pedal the harp on the fly — the emergent Synchron-style trick.
+**Black keys outside the ctrl zone**, with **Black Keys = Control**, re-pedal the
+harp: the accidental re-tunes its nearest pedal so that pitch class plays, and
+sounds on that string. Subsequent naturals on that letter keep the re-tuned
+pitch until another change (a bank recall, CC49, or a different accidental). Feed
+a chromatic sonata this way and it re-pedals itself — the emergent Synchron-style
+trick. (This is a deliberate pedal move, so it ignores the governor's pacing.)
 
 ---
 

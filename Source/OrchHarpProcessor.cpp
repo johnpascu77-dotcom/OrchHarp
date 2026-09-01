@@ -510,9 +510,14 @@ void OrchHarpAudioProcessor::runGovernor (const ohrp::Diagram& requested, double
     if (beatsSinceMove < intervalBeats)
         return;
 
-    // Buzz avoidance: skip a pedal whose string sounded within the last interval.
+    // Buzz avoidance: skip a pedal whose string sounded within the last
+    // interval - but only as a *soft* delay. On a dense passage every string is
+    // always sounding; once the move is well overdue, let it through anyway so
+    // the governor can never wedge (design §6 keeps this "irrelevant for the
+    // score").
     std::array<bool, 7> lockedOut { };
-    if (avoidRingingParam != nullptr && avoidRingingParam->load() >= 0.5f)
+    const bool overdue = beatsSinceMove > intervalBeats * 3.0;
+    if (! overdue && avoidRingingParam != nullptr && avoidRingingParam->load() >= 0.5f)
         for (int i = 0; i < 7; ++i)
             if (stringQuietBeats[static_cast<size_t> (i)] < intervalBeats)
                 lockedOut[static_cast<size_t> (i)] = true;
@@ -582,9 +587,7 @@ bool OrchHarpAudioProcessor::tryConsumeControlNote (int noteNumber)
         return true;
     }
 
-    // In Control mode any other black key is still consumed (routed to the
-    // control zone, no-op here) rather than sounded - design §4.
-    return true;
+    return false; // not a control-zone note - caller handles it (re-pedal)
 }
 
 // ---- Glissando engine ------------------------------------------------
@@ -889,9 +892,38 @@ void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int
     switch (blackMode)
     {
         case ohrp::BlackKeyMode::Control:
-            tryConsumeControlNote (inputNote);
-            drop (4);
+        {
+            if (tryConsumeControlNote (inputNote))
+            {
+                drop (4); // consumed by the control zone (bank recall / step)
+                return;
+            }
+
+            // Out-of-zone black key: the music's own accidental re-pedals the
+            // harp so its pitch class becomes playable, then sounds on that
+            // string. Subsequent naturals on that letter stay re-tuned until
+            // another change (the emergent Synchron-Harp behaviour, design §4).
+            const int p = ohrp::mod12 (inputNote);
+            const int letter = ohrp::nearestStringIndex (p, soundingDiagram);
+            const int base = ohrp::kLetterBaseSemitone[static_cast<size_t> (letter)];
+            int delta = ((p - base) % 12 + 12) % 12;
+            if (delta > 6) delta -= 12;
+            const int wantOffset = juce::jlimit (-1, 1, delta);
+
+            if (soundingDiagram[static_cast<size_t> (letter)] != wantOffset)
+            {
+                soundingDiagram[static_cast<size_t> (letter)] = wantOffset;
+                auto* pp = pedalChoice[static_cast<size_t> (letter)];
+                const int want = choiceIndexFromOffset (wantOffset);
+                if (pp != nullptr && pp->getIndex() != want)
+                    *pp = want;
+            }
+
+            const int out = juce::jlimit (0, 127,
+                12 * (inputNote / 12) + ohrp::stringSemitone (letter, soundingDiagram));
+            emit (out, letter, 1);
             return;
+        }
 
         case ohrp::BlackKeyMode::Drop:
             drop (3);
