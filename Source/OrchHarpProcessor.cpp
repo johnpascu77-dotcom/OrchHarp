@@ -9,11 +9,15 @@ namespace
     int offsetFromChoiceIndex (int index) noexcept { return juce::jlimit (-1, 1, index - 1); }
     int choiceIndexFromOffset (int offset) noexcept { return juce::jlimit (0, 2, offset + 1); }
 
-    bool isBlackKey (int noteNumber) noexcept { return ! ohrp::isWhiteKey (noteNumber); }
-
     // minChangeInterval choice -> beats (4/4 assumed; a time-signature-aware
     // version is a later refinement - see design doc §6 / §12).
     const std::array<double, 5> kIntervalBeats { 0.5, 1.0, 2.0, 4.0, 8.0 };
+
+    // glissRunDuration choice -> total run length in beats (4/4 assumed):
+    // 1/16, 1/8, 1/4, 1/2, 1 bar.
+    const std::array<double, 5> kRunDurationBeats { 0.25, 0.5, 1.0, 2.0, 4.0 };
+
+    constexpr int kMaxRingingGliss = 256;
 
     // Factory bank: the "universal glissando" starting points (design §5).
     // Authored as target pitch-class sets and fitted onto the 7 pedals by the
@@ -66,6 +70,19 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     ctrlDirectHiParam    = parameters.getRawParameterValue ("ctrlDirectHi");
     ctrlStepDownParam    = parameters.getRawParameterValue ("ctrlStepDownNote");
     ctrlStepUpParam      = parameters.getRawParameterValue ("ctrlStepUpNote");
+
+    glissCcParam           = parameters.getRawParameterValue ("glissCc");
+    glissLoStringParam     = parameters.getRawParameterValue ("glissLoString");
+    glissHiStringParam     = parameters.getRawParameterValue ("glissHiString");
+    glissBaseOctaveParam   = parameters.getRawParameterValue ("glissBaseOctave");
+    glissVelCcParam        = parameters.getRawParameterValue ("glissVelCc");
+    glissVelocityParam     = parameters.getRawParameterValue ("glissVelocity");
+    glissRingParam         = parameters.getRawParameterValue ("glissRing");
+    glissTrigLoParam       = parameters.getRawParameterValue ("glissTrigLo");
+    glissTrigHiParam       = parameters.getRawParameterValue ("glissTrigHi");
+    glissRunDirectionParam = parameters.getRawParameterValue ("glissRunDirection");
+    glissRunSpanParam      = parameters.getRawParameterValue ("glissRunSpan");
+    glissRunDurationParam  = parameters.getRawParameterValue ("glissRunDuration");
 
     bankSlotInt = dynamic_cast<juce::AudioParameterInt*> (parameters.getParameter ("bankSlot"));
 
@@ -134,6 +151,41 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::ParameterID { "ctrlStepDownNote", 1 }, "Ctrl Step Down Note", 0, 127, 12));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "ctrlStepUpNote", 1 }, "Ctrl Step Up Note", 0, 127, 13));
+
+    // ---- Glissando engine (Phase 2a) -------------------------------------
+    // Contour follower: a CC contour drives a moving string position; a note
+    // fires each time the diagram-snapped string changes.
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissCc", 1 }, "Gliss CC# (0 = off)", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissLoString", 1 }, "Gliss Low String", 0, 55, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissHiString", 1 }, "Gliss High String", 0, 55, 35));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissBaseOctave", 1 }, "Gliss Base Octave", 0, 4, 2));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissVelCc", 1 }, "Gliss Velocity CC# (0 = fixed)", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissVelocity", 1 }, "Gliss Velocity", 1, 127, 96));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "glissRing", 1 }, "Gliss Ring",
+        juce::StringArray { "Monophonic", "Ring" }, 0));
+
+    // Trigger gesture: one note in a zone sprays a full run of the current
+    // diagram over a tempo-synced duration; velocity scales speed / range.
+    // Trigger zone: 0 / 0 = off (set a zone to enable).
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissTrigLo", 1 }, "Gliss Trigger Lo Note", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissTrigHi", 1 }, "Gliss Trigger Hi Note", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "glissRunDirection", 1 }, "Gliss Run Direction",
+        juce::StringArray { "Up", "Down", "Up-Down", "Down-Up" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "glissRunSpan", 1 }, "Gliss Run Span (strings)", 1, 48, 21));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "glissRunDuration", 1 }, "Gliss Run Duration",
+        juce::StringArray { "1/16", "1/8", "1/4", "1/2", "1 bar" }, 2));
 
     return { params.begin(), params.end() };
 }
@@ -268,6 +320,12 @@ double OrchHarpAudioProcessor::minChangeIntervalInBeats() const
     return kIntervalBeats[static_cast<size_t> (idx)];
 }
 
+int OrchHarpAudioProcessor::glissBaseOctave() const
+{
+    return glissBaseOctaveParam != nullptr
+        ? juce::jlimit (0, 4, juce::roundToInt (glissBaseOctaveParam->load())) : 2;
+}
+
 ohrp::Diagram OrchHarpAudioProcessor::getSoundingDiagramForUi() const
 {
     ohrp::Diagram d = ohrp::kAllNatural;
@@ -313,6 +371,26 @@ void OrchHarpAudioProcessor::prepareToPlay (double newSampleRate, int)
     storeReadoutDiagrams (soundingDiagram);
 }
 
+void OrchHarpAudioProcessor::flushGlissNotes (juce::MidiBuffer& output, int samplePosition)
+{
+    if (lastGlissNote >= 0)
+        output.addEvent (juce::MidiMessage::noteOff (1, lastGlissNote), samplePosition);
+    if (runLastNote >= 0)
+        output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePosition);
+    for (int note : glissRingNotes)
+        output.addEvent (juce::MidiMessage::noteOff (1, note), samplePosition);
+
+    lastGlissNote = -1;
+    runLastNote = -1;
+    lastGlissString = std::numeric_limits<int>::min();
+    glissRingNotes.clear();
+    pendingGliss.clear();
+    runOffPpq = -1.0e12;
+
+    lastGlissNoteUi.store (-1);
+    glissActiveCountUi.store (0);
+}
+
 void OrchHarpAudioProcessor::releaseResources() {}
 
 bool OrchHarpAudioProcessor::isBusesLayoutSupported (const BusesLayout&) const { return true; }
@@ -321,6 +399,15 @@ void OrchHarpAudioProcessor::resetNoteMap()
 {
     activeNotes.clear();
     lastStringSoundPpq.fill (-1.0e12);
+
+    lastGlissNote = -1;
+    runLastNote = -1;
+    lastGlissString = std::numeric_limits<int>::min();
+    glissRingNotes.clear();
+    pendingGliss.clear();
+    runOffPpq = -1.0e12;
+    lastGlissNoteUi.store (-1);
+    glissActiveCountUi.store (0);
 }
 
 // ---- Governor ---------------------------------------------------------
@@ -430,8 +517,207 @@ bool OrchHarpAudioProcessor::tryConsumeControlNote (int noteNumber)
     return true;
 }
 
+// ---- Glissando engine ------------------------------------------------
+
+bool OrchHarpAudioProcessor::handleGlissCc (const juce::MidiMessage& message, int samplePosition,
+                                            juce::MidiBuffer& output)
+{
+    const auto readNum = [] (std::atomic<float>* p, int fallback)
+    {
+        return p != nullptr ? juce::jlimit (0, 127, juce::roundToInt (p->load())) : fallback;
+    };
+
+    const int glissCc  = readNum (glissCcParam, 0);
+    const int velCc     = readNum (glissVelCcParam, 0);
+    const int cc        = message.getControllerNumber();
+    const int value     = juce::jlimit (0, 127, message.getControllerValue());
+
+    if (velCc != 0 && cc == velCc)
+    {
+        glissVelValue = juce::jmax (1, value);
+        return true; // consumed
+    }
+
+    if (glissCc == 0 || cc != glissCc)
+        return false;
+
+    lastCc.store (cc);
+
+    // CC back to 0 damps the run.
+    if (value == 0)
+    {
+        flushGlissNotes (output, samplePosition);
+        return true;
+    }
+
+    const int loS  = juce::jlimit (0, 55, readNum (glissLoStringParam, 0));
+    const int hiS  = juce::jlimit (0, 55, readNum (glissHiStringParam, 35));
+    const int s = ohrp::mapContour (value, loS, hiS);
+
+    if (s == lastGlissString)
+        return true;
+
+    lastGlissString = s;
+
+    const int note = ohrp::stringIndexToNote (s, soundingDiagram, glissBaseOctave());
+    const int vel = glissVelCcParam != nullptr && readNum (glissVelCcParam, 0) != 0
+        ? glissVelValue
+        : juce::jlimit (1, 127, readNum (glissVelocityParam, 96));
+
+    const bool ring = glissRingParam != nullptr && glissRingParam->load() >= 0.5f;
+
+    if (! ring)
+    {
+        if (lastGlissNote >= 0 && lastGlissNote != note)
+            output.addEvent (juce::MidiMessage::noteOff (1, lastGlissNote), samplePosition);
+        if (lastGlissNote != note)
+            output.addEvent (juce::MidiMessage::noteOn (1, note, static_cast<juce::uint8> (vel)), samplePosition);
+        lastGlissNote = note;
+    }
+    else
+    {
+        if (glissRingNotes.size() >= static_cast<size_t> (kMaxRingingGliss))
+        {
+            output.addEvent (juce::MidiMessage::noteOff (1, glissRingNotes.front()), samplePosition);
+            glissRingNotes.erase (glissRingNotes.begin());
+        }
+        output.addEvent (juce::MidiMessage::noteOn (1, note, static_cast<juce::uint8> (vel)), samplePosition);
+        glissRingNotes.push_back (note);
+        lastGlissNote = note;
+    }
+
+    lastGlissNoteUi.store (note);
+    glissActiveCountUi.store (ring ? static_cast<int> (glissRingNotes.size()) : 1);
+    return true;
+}
+
+bool OrchHarpAudioProcessor::tryStartTriggerRun (int noteNumber, juce::uint8 velocity,
+                                                 double eventPpq, double /*ppqPerSample*/)
+{
+    const auto readNum = [] (std::atomic<float>* p, int fallback)
+    {
+        return p != nullptr ? juce::roundToInt (p->load()) : fallback;
+    };
+
+    const int trigLoRaw = juce::jlimit (0, 127, readNum (glissTrigLoParam, 0));
+    const int trigHiRaw = juce::jlimit (0, 127, readNum (glissTrigHiParam, 0));
+    const int trigLo = juce::jmin (trigLoRaw, trigHiRaw);
+    const int trigHi = juce::jmax (trigLoRaw, trigHiRaw);
+
+    if (trigHi <= 0 || noteNumber < trigLo || noteNumber > trigHi)
+        return false; // 0/0 = trigger engine off
+
+    const int baseOct = glissBaseOctave();
+    const int startS = ohrp::noteToNearestStringIndex (noteNumber, soundingDiagram, baseOct);
+
+    const int spanBase = juce::jlimit (1, 48, readNum (glissRunSpanParam, 21));
+    const int span = juce::jmax (1, juce::roundToInt (spanBase * (0.25f + 0.75f * velocity / 127.0f)));
+
+    const int dir = juce::jlimit (0, 3, readNum (glissRunDirectionParam, 0));
+
+    std::vector<int> indices;
+    auto ramp = [&indices] (int from, int to)
+    {
+        const int step = to >= from ? 1 : -1;
+        for (int s = from; s != to + step; s += step)
+            indices.push_back (s);
+    };
+
+    switch (dir)
+    {
+        case 1:  ramp (startS, startS - span); break;                     // Down
+        case 2:  ramp (startS, startS + span); ramp (startS + span - 1, startS); break; // Up-Down
+        case 3:  ramp (startS, startS - span); ramp (startS - span + 1, startS); break; // Down-Up
+        default: ramp (startS, startS + span); break;                     // Up
+    }
+
+    if (indices.empty())
+        return true;
+
+    const int durIdx = juce::jlimit (0, 4, readNum (glissRunDurationParam, 2));
+    const double durBeats = kRunDurationBeats[static_cast<size_t> (durIdx)];
+    const int n = static_cast<int> (indices.size());
+
+    for (int k = 0; k < n; ++k)
+    {
+        const double frac = n > 1 ? static_cast<double> (k) / (n - 1) : 0.0;
+        pendingGliss.push_back ({ eventPpq + frac * durBeats, indices[static_cast<size_t> (k)], velocity });
+    }
+    // Terminal release marker for the Monophonic run.
+    pendingGliss.push_back ({ eventPpq + durBeats + durBeats / juce::jmax (1, n) * 0.5, -1, 0 });
+
+    std::sort (pendingGliss.begin(), pendingGliss.end(),
+               [] (const PendingGlissEvent& a, const PendingGlissEvent& b) { return a.ppq < b.ppq; });
+    return true;
+}
+
+void OrchHarpAudioProcessor::drainPendingGliss (juce::MidiBuffer& output, double blockStartPpq,
+                                                double blockEndPpq, double ppqPerSample, int numSamples)
+{
+    if (pendingGliss.empty())
+        return;
+
+    const bool ring = glissRingParam != nullptr && glissRingParam->load() >= 0.5f;
+    const int baseOct = glissBaseOctave();
+
+    auto samplePosFor = [&] (double ppq)
+    {
+        if (ppqPerSample <= 0.0)
+            return 0;
+        return juce::jlimit (0, juce::jmax (0, numSamples - 1),
+                             juce::roundToInt ((ppq - blockStartPpq) / ppqPerSample));
+    };
+
+    size_t drained = 0;
+    for (auto& ev : pendingGliss)
+    {
+        if (ev.ppq >= blockEndPpq)
+            break;
+        ++drained;
+
+        const int samplePos = samplePosFor (ev.ppq);
+
+        if (ev.velocity == 0)
+        {
+            // Terminal release marker (pushed as {ppq, -1, 0}).
+            if (! ring && runLastNote >= 0)
+            {
+                output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePos);
+                runLastNote = -1;
+            }
+            continue;
+        }
+
+        const int note = ohrp::stringIndexToNote (ev.stringIndex, soundingDiagram, baseOct);
+
+        if (! ring)
+        {
+            if (runLastNote >= 0 && runLastNote != note)
+                output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePos);
+            output.addEvent (juce::MidiMessage::noteOn (1, note, ev.velocity), samplePos);
+            runLastNote = note;
+        }
+        else
+        {
+            if (glissRingNotes.size() >= static_cast<size_t> (kMaxRingingGliss))
+            {
+                output.addEvent (juce::MidiMessage::noteOff (1, glissRingNotes.front()), samplePos);
+                glissRingNotes.erase (glissRingNotes.begin());
+            }
+            output.addEvent (juce::MidiMessage::noteOn (1, note, ev.velocity), samplePos);
+            glissRingNotes.push_back (note);
+        }
+
+        lastGlissNoteUi.store (note);
+    }
+
+    pendingGliss.erase (pendingGliss.begin(), pendingGliss.begin() + static_cast<std::ptrdiff_t> (drained));
+    glissActiveCountUi.store (ring ? static_cast<int> (glissRingNotes.size())
+                                   : (runLastNote >= 0 ? 1 : 0));
+}
+
 void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int samplePosition,
-                                           juce::MidiBuffer& output, double blockPpq)
+                                           juce::MidiBuffer& output, double blockPpq, double ppqPerSample)
 {
     const int channel = juce::jlimit (1, 16, message.getChannel());
     const int inputNote = juce::jlimit (0, 127, message.getNoteNumber());
@@ -469,6 +755,21 @@ void OrchHarpAudioProcessor::handleNoteOn (const juce::MidiMessage& message, int
         lastOutputLetter.store (-1);
         lastAction.store (action);
     };
+
+    // Trigger-gesture glissando: a note in the trigger zone is consumed and
+    // sprays a scheduled run (design §9). Checked before white/black routing.
+    {
+        const double eventPpq = blockPpq + samplePosition * ppqPerSample;
+        if (tryStartTriggerRun (inputNote, velocity, eventPpq, ppqPerSample))
+        {
+            track (-1); // swallow this note-on and its matching note-off
+            lastInputNote.store (inputNote);
+            lastOutputNote.store (-1);
+            lastOutputLetter.store (-1);
+            lastAction.store (5); // trigger run
+            return;
+        }
+    }
 
     const auto blackMode = static_cast<ohrp::BlackKeyMode> (
         blackKeyModeParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (blackKeyModeParam->load())) : 0);
@@ -606,14 +907,18 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     const double ppqPerSample = sampleRate > 0.0 ? (bpm / 60.0) / sampleRate : 0.0;
     integratedPpq = blockStartPpq + numSamples * ppqPerSample;
 
+    const double blockEndPpq = blockStartPpq + numSamples * ppqPerSample;
+
     // Chromatic = total bypass: every message passes through untouched.
     const bool chromatic = modeParam != nullptr && modeParam->load() >= 0.5f;
     if (chromatic)
     {
+        // Release any ringing gliss notes into the untouched stream before we
+        // bow out, so nothing hangs.
+        flushGlissNotes (midiMessages, 0);
         if (! activeNotes.empty())
             resetNoteMap();
         wasPlaying = playing;
-        // Keep the readout honest while bypassed.
         storeReadoutDiagrams (readRequestedDiagram());
         return;
     }
@@ -633,16 +938,24 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     const ohrp::Diagram requested = readRequestedDiagram();
 
     // Pedals are set during the rest before playing: snap on the transport edge.
+    juce::MidiBuffer output;
+
     if (! playing)
+    {
+        if (wasPlaying)
+            flushGlissNotes (output, 0); // transport stop: damp everything
         snapSoundingToRequested (requested);
+    }
     else if (! wasPlaying)
+    {
         snapSoundingToRequested (requested);
+    }
     else
+    {
         runGovernor (requested, blockStartPpq);
+    }
 
     wasPlaying = playing;
-
-    juce::MidiBuffer output;
 
     for (const auto metadata : midiMessages)
     {
@@ -653,7 +966,12 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         {
             const int ccChannel = ccChannelParam != nullptr
                 ? juce::jlimit (0, 16, juce::roundToInt (ccChannelParam->load())) : 0;
-            if (ccChannel == 0 || message.getChannel() == ccChannel)
+            const bool channelOk = ccChannel == 0 || message.getChannel() == ccChannel;
+
+            if (channelOk && handleGlissCc (message, samplePosition, output))
+                continue; // gliss CCs are consumed, not passed downstream
+
+            if (channelOk)
                 handleControlCc (message);
 
             output.addEvent (message, samplePosition); // control CCs pass through
@@ -662,7 +980,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (message.isNoteOn())
         {
-            handleNoteOn (message, samplePosition, output, blockStartPpq);
+            handleNoteOn (message, samplePosition, output, blockStartPpq, ppqPerSample);
             continue;
         }
 
@@ -674,6 +992,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (message.isAllNotesOff() || message.isAllSoundOff())
         {
+            flushGlissNotes (output, samplePosition);
             resetNoteMap();
             output.addEvent (message, samplePosition);
             continue;
@@ -681,6 +1000,9 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         output.addEvent (message, samplePosition);
     }
+
+    // Emit any scheduled trigger-run notes that fall in this block.
+    drainPendingGliss (output, blockStartPpq, blockEndPpq, ppqPerSample, numSamples);
 
     midiMessages.swapWith (output);
 

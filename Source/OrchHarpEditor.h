@@ -83,6 +83,17 @@ private:
     juce::Slider ccBankSlider, ccChannelSlider;
     juce::Slider ctrlDirectLoSlider, ctrlDirectHiSlider, ctrlStepDownSlider, ctrlStepUpSlider;
 
+    juce::Label contourGlissLabel;
+    juce::Label glissCcLabel, glissRangeLabel, glissBaseOctaveLabel, glissVelLabel, glissRingLabel;
+    juce::Slider glissCcSlider, glissLoStringSlider, glissHiStringSlider, glissBaseOctaveSlider;
+    juce::Slider glissVelCcSlider, glissVelocitySlider;
+    juce::ComboBox glissRingBox;
+
+    juce::Label triggerGlissLabel;
+    juce::Label glissTrigZoneLabel, glissRunDirLabel, glissRunSpanLabel, glissRunDurLabel;
+    juce::Slider glissTrigLoSlider, glissTrigHiSlider, glissRunSpanSlider;
+    juce::ComboBox glissRunDirectionBox, glissRunDurationBox;
+
     juce::Label statusLabel;
 
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -94,6 +105,10 @@ private:
     std::unique_ptr<ButtonAttachment> playabilityAttachment, changesAtRestsOnlyAttachment, avoidRingingAttachment;
     std::unique_ptr<SliderAttachment> ccBankAttachment, ccChannelAttachment;
     std::unique_ptr<SliderAttachment> ctrlDirectLoAttachment, ctrlDirectHiAttachment, ctrlStepDownAttachment, ctrlStepUpAttachment;
+    std::unique_ptr<SliderAttachment> glissCcAttachment, glissLoStringAttachment, glissHiStringAttachment, glissBaseOctaveAttachment;
+    std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment, glissRunSpanAttachment;
+    std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment;
+    std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissRunDirectionAttachment, glissRunDurationAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OrchHarpAudioProcessorEditor)
 };

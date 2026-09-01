@@ -217,6 +217,28 @@ int main()
         check (diagramsEqual (lockedStep, start), "a locked-out pedal does not move this step");
     }
 
+    // --- Glissando string-index model -----------------------------
+    {
+        Diagram natural = kAllNatural;
+        checkInt (stringIndexToNote (0, natural, 2), 24, "string index 0 (baseOct 2) = MIDI 24 (C1)");
+        checkInt (stringIndexToNote (7, natural, 2), 36, "string index 7 = one octave up = MIDI 36");
+        checkInt (stringIndexToNote (4, natural, 2), 31, "string index 4 = G string = MIDI 31");
+
+        Diagram bFlat = kAllNatural; bFlat[6] = -1;
+        checkInt (stringIndexToNote (6, bFlat, 2), 34, "string index 6 on a Bb diagram = MIDI 34 (Bb1)");
+
+        // Round-trip: an exact string note maps back to its index.
+        checkInt (noteToNearestStringIndex (36, natural, 2), 7, "MIDI 36 -> string index 7");
+        checkInt (noteToNearestStringIndex (26, natural, 2), 1, "MIDI 26 (D1) -> string index 1");
+        checkInt (noteToNearestStringIndex (31, natural, 2), 4, "MIDI 31 (G1) -> string index 4");
+
+        // Contour map endpoints and midpoint.
+        checkInt (mapContour (0, 0, 35), 0,   "contour cc 0 -> lo string");
+        checkInt (mapContour (127, 0, 35), 35, "contour cc 127 -> hi string");
+        checkInt (mapContour (64, 0, 36), 18, "contour cc 64 -> midpoint");
+        checkInt (mapContour (127, 35, 0), 0,  "contour with lo>hi descends");
+    }
+
     std::cout << "-----------------------\n";
     if (failures == 0)
     {

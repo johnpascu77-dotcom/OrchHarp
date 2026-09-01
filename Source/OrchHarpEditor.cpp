@@ -209,8 +209,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
     setResizable (true, true);
-    setResizeLimits (680, 760, 1200, 1200);
-    setSize (780, 880);
+    setResizeLimits (680, 820, 1200, 1280);
+    setSize (780, 1000);
 
     auto& params = audioProcessor.getParameters();
 
@@ -425,6 +425,71 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     ctrlStepDownAttachment = std::make_unique<SliderAttachment> (params, "ctrlStepDownNote", ctrlStepDownSlider);
     ctrlStepUpAttachment = std::make_unique<SliderAttachment> (params, "ctrlStepUpNote", ctrlStepUpSlider);
 
+    // ---- Contour glissando ----
+    contourGlissLabel.setText ("Contour Glissando", juce::dontSendNotification);
+    styleLabel (contourGlissLabel, 13.0f, true);
+    addAndMakeVisible (contourGlissLabel);
+
+    glissCcLabel.setText ("Gliss CC# / lo-hi string / base oct", juce::dontSendNotification);
+    styleLabel (glissCcLabel, 12.0f);
+    addAndMakeVisible (glissCcLabel);
+    initIncDec (glissCcSlider, 0, 127);
+    initIncDec (glissLoStringSlider, 0, 55);
+    initIncDec (glissHiStringSlider, 0, 55);
+    initIncDec (glissBaseOctaveSlider, 0, 4);
+    addAndMakeVisible (glissCcSlider);
+    addAndMakeVisible (glissLoStringSlider);
+    addAndMakeVisible (glissHiStringSlider);
+    addAndMakeVisible (glissBaseOctaveSlider);
+    glissCcAttachment = std::make_unique<SliderAttachment> (params, "glissCc", glissCcSlider);
+    glissLoStringAttachment = std::make_unique<SliderAttachment> (params, "glissLoString", glissLoStringSlider);
+    glissHiStringAttachment = std::make_unique<SliderAttachment> (params, "glissHiString", glissHiStringSlider);
+    glissBaseOctaveAttachment = std::make_unique<SliderAttachment> (params, "glissBaseOctave", glissBaseOctaveSlider);
+
+    glissVelLabel.setText ("Vel CC# / fixed vel / ring", juce::dontSendNotification);
+    styleLabel (glissVelLabel, 12.0f);
+    addAndMakeVisible (glissVelLabel);
+    initIncDec (glissVelCcSlider, 0, 127);
+    initIncDec (glissVelocitySlider, 1, 127);
+    addAndMakeVisible (glissVelCcSlider);
+    addAndMakeVisible (glissVelocitySlider);
+    glissVelCcAttachment = std::make_unique<SliderAttachment> (params, "glissVelCc", glissVelCcSlider);
+    glissVelocityAttachment = std::make_unique<SliderAttachment> (params, "glissVelocity", glissVelocitySlider);
+    glissRingBox.addItemList ({ "Monophonic", "Ring" }, 1);
+    styleBox (glissRingBox);
+    addAndMakeVisible (glissRingBox);
+    glissRingAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRing", glissRingBox);
+
+    // ---- Trigger glissando ----
+    triggerGlissLabel.setText ("Trigger Glissando", juce::dontSendNotification);
+    styleLabel (triggerGlissLabel, 13.0f, true);
+    addAndMakeVisible (triggerGlissLabel);
+
+    glissTrigZoneLabel.setText ("Trigger note zone lo / hi (0/0 = off)", juce::dontSendNotification);
+    styleLabel (glissTrigZoneLabel, 12.0f);
+    addAndMakeVisible (glissTrigZoneLabel);
+    initIncDec (glissTrigLoSlider, 0, 127);
+    initIncDec (glissTrigHiSlider, 0, 127);
+    addAndMakeVisible (glissTrigLoSlider);
+    addAndMakeVisible (glissTrigHiSlider);
+    glissTrigLoAttachment = std::make_unique<SliderAttachment> (params, "glissTrigLo", glissTrigLoSlider);
+    glissTrigHiAttachment = std::make_unique<SliderAttachment> (params, "glissTrigHi", glissTrigHiSlider);
+
+    glissRunDirLabel.setText ("Run direction / span / duration", juce::dontSendNotification);
+    styleLabel (glissRunDirLabel, 12.0f);
+    addAndMakeVisible (glissRunDirLabel);
+    glissRunDirectionBox.addItemList ({ "Up", "Down", "Up-Down", "Down-Up" }, 1);
+    styleBox (glissRunDirectionBox);
+    addAndMakeVisible (glissRunDirectionBox);
+    glissRunDirectionAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDirection", glissRunDirectionBox);
+    initIncDec (glissRunSpanSlider, 1, 48);
+    addAndMakeVisible (glissRunSpanSlider);
+    glissRunSpanAttachment = std::make_unique<SliderAttachment> (params, "glissRunSpan", glissRunSpanSlider);
+    glissRunDurationBox.addItemList ({ "1/16", "1/8", "1/4", "1/2", "1 bar" }, 1);
+    styleBox (glissRunDurationBox);
+    addAndMakeVisible (glissRunDurationBox);
+    glissRunDurationAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDuration", glissRunDurationBox);
+
     statusLabel.setJustificationType (juce::Justification::centred);
     statusLabel.setColour (juce::Label::textColourId, kAmber);
     statusLabel.setFont (juce::FontOptions (12.0f, juce::Font::bold));
@@ -572,6 +637,50 @@ void OrchHarpAudioProcessorEditor::resized()
         row.removeFromLeft (8);
         ctrlStepUpSlider.setBounds (row.removeFromLeft (110));
     }
+    area.removeFromTop (10);
+
+    contourGlissLabel.setBounds (area.removeFromTop (18));
+    {
+        auto row = area.removeFromTop (26);
+        glissCcLabel.setBounds (row.removeFromLeft (210));
+        glissCcSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (6);
+        glissLoStringSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (6);
+        glissHiStringSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (6);
+        glissBaseOctaveSlider.setBounds (row.removeFromLeft (96));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        glissVelLabel.setBounds (row.removeFromLeft (210));
+        glissVelCcSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (6);
+        glissVelocitySlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (10);
+        glissRingBox.setBounds (row.removeFromLeft (120));
+    }
+    area.removeFromTop (10);
+
+    triggerGlissLabel.setBounds (area.removeFromTop (18));
+    {
+        auto row = area.removeFromTop (26);
+        glissTrigZoneLabel.setBounds (row.removeFromLeft (210));
+        glissTrigLoSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (6);
+        glissTrigHiSlider.setBounds (row.removeFromLeft (96));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        glissRunDirLabel.setBounds (row.removeFromLeft (210));
+        glissRunDirectionBox.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (8);
+        glissRunSpanSlider.setBounds (row.removeFromLeft (96));
+        row.removeFromLeft (8);
+        glissRunDurationBox.setBounds (row.removeFromLeft (100));
+    }
 
     auto footer = getLocalBounds().reduced (20, 0);
     footer.removeFromBottom (10);
@@ -590,6 +699,15 @@ void OrchHarpAudioProcessorEditor::timerCallback()
 
     const bool pedalMode = audioProcessor.getParameters().getRawParameterValue ("mode")->load() < 0.5f;
     for (auto& b : pedalBoxes) b.setEnabled (pedalMode);
+
+    const bool fixedVel = audioProcessor.getParameters().getRawParameterValue ("glissVelCc")->load() < 0.5f;
+    glissVelocitySlider.setEnabled (pedalMode && fixedVel);
+    for (auto* c : { &glissCcSlider, &glissLoStringSlider, &glissHiStringSlider, &glissBaseOctaveSlider,
+                     &glissVelCcSlider, &glissTrigLoSlider, &glissTrigHiSlider, &glissRunSpanSlider })
+        c->setEnabled (pedalMode);
+    glissRingBox.setEnabled (pedalMode);
+    glissRunDirectionBox.setEnabled (pedalMode);
+    glissRunDurationBox.setEnabled (pedalMode);
 
     refreshBankCells();
     updateStatus();
@@ -611,6 +729,8 @@ void OrchHarpAudioProcessorEditor::updateStatus()
             text << "(dropped)";
         else if (action == 4)
             text << "(control)";
+        else if (action == 5)
+            text << "(gliss run)";
         else
         {
             text << noteName (out);
@@ -627,6 +747,12 @@ void OrchHarpAudioProcessorEditor::updateStatus()
     const int transit = audioProcessor.getMovesInTransitForUi();
     if (transit > 0)
         text << "   |   " << transit << " pedal" << (transit == 1 ? "" : "s") << " in transit";
+
+    const int glissActive = audioProcessor.getGlissActiveCountForUi();
+    const int glissNote = audioProcessor.getLastGlissNoteForUi();
+    if (glissActive > 0 && glissNote >= 0)
+        text << "   |   gliss " << noteName (glissNote)
+             << " (" << glissActive << (glissActive == 1 ? " note)" : " ringing)");
 
     const int cc = audioProcessor.getLastCcForUi();
     if (cc >= 0)

@@ -1,14 +1,12 @@
 # OrchHarp — Design
 
-Date: 2026-08-31 (Phase 1 built 2026-09-01)
-Status: **Phase 1 built** — pure logic (`OrchHarpPedalLogic` + check tool, 29
-assertions green), processor (20 params, string transform, 4 black-key modes,
-playability governor, CC49 + black-key direct/step triggers, 12-slot bank +
-factory fill, bank state persistence) and full visual editor (pedal-diagram
-widget showing sounding-vs-requested, bank grid with shift-save / right-click
-rename+recolour, family helper, governor + trigger rows). VST3 + check target
-both build clean (VS 18 2026 / JUCE at `C:/JUCE/JUCE`). **Not yet live-tested in
-Bitwig.** Phase 2 (glissando engines + pedal-change markers) not started.
+Date: 2026-08-31 (Phase 1 + 2a built 2026-09-01)
+Status: **Phase 1 live** (transformer — pure logic + check tool, processor,
+visual editor with the real harp pedal-diagram readout; live-tested in Bitwig,
+"stunning results"). **Phase 2a built, not yet live-tested** — the two glissando
+engines (contour-follower + trigger-gesture), 11 new params, 40 check assertions
+green, VST3 clean (VS 18 2026 / JUCE `C:/JUCE/JUCE`). **Phase 2b** (pedal-change
+markers → OrchCapture) not started.
 Repo: `C:\AudioDev\Repos\OrchHarp` (git initialised, no remote yet). GitHub
 `johnpascu77-dotcom/OrchHarp` (public, like the rest of the Orch family).
 Plugin code `Ohrp`, VST3, MIDI effect. Consumes the CC49/Harp slot reserved in
@@ -283,28 +281,34 @@ sounding diagram, requested diagram, moves-in-transit count, last CC.
 
 ## 9. Phase 2 — the generator + notation
 
-### Contour-follower glissando
+### Contour-follower glissando — BUILT (Phase 2a, 2026-09-01)
 
-`glissCc` param (Int, 0 = off). The CC value maps to a **string position**
-(`glissLoString` … `glissHiString`, in absolute string indices across octaves).
-OrchHarp emits a note **each time the mapped-and-diagram-snapped string changes** —
-so a drawn rising CC ramp becomes exactly one note per diagram degree, ascending
-= a glissando; an LFO becomes oscillating runs; a hand-drawn curve becomes that
-shape as harp notes; an MC ModulationRoute becomes an arc-driven gliss.
-Re-pedalling mid-sweep recolours the run live. Velocity from a second CC or
-fixed. Ring/damp behaviour a small param set.
+`glissCc` param (Int, 0 = off). The CC value maps via `ohrp::mapContour` to an
+**absolute string index** between `glissLoString` and `glissHiString`
+(`glissLoString` may exceed `glissHiString` for a descending map);
+`ohrp::stringIndexToNote` resolves it against the **sounding** diagram at the
+`glissBaseOctave` (string index 0 = MIDI 24 by default). A note fires each time
+that string index changes — a rising ramp → ascending run, an LFO → oscillating
+runs, a hand-drawn curve → that shape, an MC ModulationRoute → arc-driven gliss.
+Because the pitch is resolved live, re-pedalling mid-sweep recolours the run.
+Velocity: `glissVelCc` (0 = use fixed `glissVelocity`). `glissRing`:
+**Monophonic** (each new string note-offs the previous) / **Ring** (notes ring
+and pile up; damped when `glissCc` returns to 0, on transport stop, or
+All-Notes-Off). The `glissCc` / `glissVelCc` messages are consumed, not passed
+downstream. Gliss notes are emitted on channel 1.
 
-### Trigger-gesture glissando
+### Trigger-gesture glissando — BUILT (Phase 2a, 2026-09-01)
 
-A configurable "gliss trigger" note zone. One note there → OrchHarp sprays a full
-ascending or descending run of the current diagram from that pitch over a
-tempo-synced duration; velocity = speed and/or range. The classic notated harp
-gliss, no automation drawing.
+`glissTrigLo` / `glissTrigHi` note zone (0 / 0 = off). A note-on in the zone is
+consumed and schedules a run: start = `ohrp::noteToNearestStringIndex` of the
+trigger pitch, `span = glissRunSpan * (0.25 + 0.75·vel/127)` strings,
+`glissRunDirection` (Up / Down / Up-Down / Down-Up), spread evenly over
+`glissRunDuration` (1/16…1 bar, 4/4 assumed). Scheduled events carry a **string
+index**, resolved to a pitch at emission time, so a pedal change mid-run
+recolours the tail. Monophonic / Ring per `glissRing`, same as the contour
+engine. Scheduler = a ppq-sorted `pendingGliss` vector drained each block.
 
-Both feed the same white-key/string path as §4 and mix with the transformed
-real-note input (held chord + CC gliss over it = harp texture).
-
-### Pedal-change markers for OrchCapture
+### Pedal-change markers for OrchCapture — Phase 2b (not started)
 
 OrchHarp consumes the diagram-change keyswitches, but the score wants them shown.
 On each *sounding*-diagram change, emit a marker (a text meta, or a tagged note
@@ -318,8 +322,9 @@ articulation track. Needs a small OrchCapture-side addition to recognise the tag
 
 | Phase | What |
 |---|---|
-| **1 — transformer** | String model, white-key → string, black-key modes, Chromatic bypass, 7 pedal params + bank + family/variant helper, the playability governor, CC49 + black-key (direct + step) triggers, live diagram readout. Pure `OrchHarpPedalLogic` + `OrchHarpPedalLogicCheck`. Factory bank. |
-| **2 — generator + notation** | Contour-follower gliss, trigger-gesture gliss, pedal-change markers → OrchCapture `<name> Pedals`. |
+| **1 — transformer** ✅ | String model, white-key → string, black-key modes, Chromatic bypass, 7 pedal params + bank + family/variant helper, the playability governor, CC49 + black-key (direct + step) triggers, live diagram readout. Pure `OrchHarpPedalLogic` + `OrchHarpPedalLogicCheck`. Factory bank. Built + live-tested 2026-09-01. |
+| **2a — glissando engines** ✅ | Contour-follower gliss + trigger-gesture gliss. Built 2026-09-01, not yet live-tested. |
+| **2b — notation** | Pedal-change markers → OrchCapture `<name> Pedals` track (needs an OrchCapture-side change — no CC/SysEx capture there today). Transport mechanism undecided (reserved-note burst / SysEx / reserved CC pair). |
 | **later** | MC 2-CC diagram broadcast; harmonics / près-de-la-table as an articulation hint (probably OrchNoteMapper's job, not here). |
 
 ## 11. Build

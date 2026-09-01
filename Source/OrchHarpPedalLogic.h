@@ -74,6 +74,27 @@ namespace ohrp
     // as the input): used by BlackKeyMode::Nearest.
     int nearestStringNote (int noteNumber, const Diagram& diagram) noexcept;
 
+    // ---- Glissando engine (Phase 2) --------------------------------------
+    //
+    // An "absolute string index" spans the whole harp: octave = floor(s / 7),
+    // letter = s - 7*octave (0..6). The same index resolves to a different
+    // pitch under a different diagram - that is what makes a re-pedalled
+    // glissando recolour live.
+
+    // MIDI note sounded by an absolute string index under a diagram. baseOctave
+    // places string index 0 (its C): baseOctave 2 -> MIDI 24 for an all-natural
+    // diagram.
+    int stringIndexToNote (int stringIndex, const Diagram& diagram, int baseOctave) noexcept;
+
+    // Absolute string index whose sounded pitch is closest to `noteNumber`
+    // (tie -> lower index). Inverse of stringIndexToNote for the trigger-run
+    // start position.
+    int noteToNearestStringIndex (int noteNumber, const Diagram& diagram, int baseOctave) noexcept;
+
+    // Map a 0..127 CC value onto a string index between loStringIndex and
+    // hiStringIndex (lo may exceed hi for a descending contour).
+    int mapContour (int ccValue, int loStringIndex, int hiStringIndex) noexcept;
+
     // Fit a pedal diagram onto an arbitrary target pitch-class set: every
     // set member should be sounded by some string, no string should sound
     // outside the set, then least pedal effort. For a 7-note set this is the

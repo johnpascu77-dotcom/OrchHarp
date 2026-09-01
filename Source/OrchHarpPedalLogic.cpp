@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace ohrp
 {
@@ -245,6 +246,35 @@ namespace ohrp
     Diagram familyVariantKeyToDiagram (Family family, int variant, int baseKey)
     {
         return bestFitDiagram (familyVariantPitchClasses (family, variant, baseKey));
+    }
+
+    int stringIndexToNote (int stringIndex, const Diagram& diagram, int baseOctave) noexcept
+    {
+        const int octave = floorDiv (stringIndex, 7);
+        const int letter = stringIndex - 7 * octave; // 0..6
+        return clampNote (12 * (baseOctave + octave) + stringSemitone (letter, diagram));
+    }
+
+    int noteToNearestStringIndex (int noteNumber, const Diagram& diagram, int baseOctave) noexcept
+    {
+        int bestIndex = 0;
+        int bestDist = 1 << 20;
+        for (int s = -7; s <= 56; ++s)
+        {
+            const int dist = std::abs (stringIndexToNote (s, diagram, baseOctave) - noteNumber);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestIndex = s;
+            }
+        }
+        return bestIndex;
+    }
+
+    int mapContour (int ccValue, int loStringIndex, int hiStringIndex) noexcept
+    {
+        const float t = std::clamp (ccValue, 0, 127) / 127.0f;
+        return static_cast<int> (std::lround (loStringIndex + t * static_cast<float> (hiStringIndex - loStringIndex)));
     }
 
     int numVariants (Family family) noexcept
