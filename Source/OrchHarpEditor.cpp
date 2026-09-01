@@ -80,54 +80,71 @@ void PedalDiagramComponent::paint (juce::Graphics& g)
     g.setColour (kPanel);
     g.fillRoundedRectangle (area, 6.0f);
 
-    const float colW = area.getWidth() / 7.0f;
-    const float topY = area.getY() + 18.0f;
-    const float botY = area.getBottom() - 18.0f;
-    const std::array<float, 3> rowY { topY, (topY + botY) * 0.5f, botY }; // flat / natural / sharp
+    // Real harp pedal-diagram notation: one horizontal line = the natural
+    // position; each pedal is a short vertical dash, drawn ABOVE the line for
+    // flat, THROUGH it for natural, BELOW it for sharp. Left to right the
+    // pedals follow the harp's own board: D C B | E F G A, left foot then
+    // right foot, split by the centre divider.
+    const float legendW = 40.0f;
+    const float padX = 10.0f;
+    const float x0 = area.getX() + legendW;
+    const float spanW = area.getRight() - padX - x0;
+    const float lineY = area.getY() + area.getHeight() * 0.46f;
+    const float dash = 12.0f;   // half-length of a pedal dash
+    const float gap = 6.0f;     // clear space between a flat/sharp dash and the line
 
-    g.setColour (juce::Colours::white.withAlpha (0.6f));
-    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    g.drawText ("b", juce::Rectangle<float> (area.getX() - 2, rowY[0] - 8, 16, 16), juce::Justification::centred);
-    g.drawText ("n", juce::Rectangle<float> (area.getX() - 2, rowY[1] - 8, 16, 16), juce::Justification::centred);
-    g.drawText ("#", juce::Rectangle<float> (area.getX() - 2, rowY[2] - 8, 16, 16), juce::Justification::centred);
+    // Left-margin legend, aligned to where each dash sits.
+    g.setColour (juce::Colours::white.withAlpha (0.4f));
+    g.setFont (juce::FontOptions (10.0f));
+    g.drawText ("flat",  juce::Rectangle<float> (area.getX(), lineY - gap - 2 * dash - 6, legendW - 6, 12), juce::Justification::centredRight);
+    g.drawText ("nat",   juce::Rectangle<float> (area.getX(), lineY - 6,                   legendW - 6, 12), juce::Justification::centredRight);
+    g.drawText ("sharp", juce::Rectangle<float> (area.getX(), lineY + gap + dash - 4,       legendW - 6, 12), juce::Justification::centredRight);
+
+    // The natural reference line.
+    g.setColour (juce::Colours::white.withAlpha (0.4f));
+    g.drawLine (x0, lineY, x0 + spanW, lineY, 1.5f);
 
     for (int slot = 0; slot < 7; ++slot)
     {
         const int letter = kPedalDrawOrder[static_cast<size_t> (slot)];
-        const float cx = area.getX() + colW * (slot + 0.5f);
+        const float cx = x0 + spanW * ((slot + 0.5f) / 7.0f);
 
-        // Foot divider after the third pedal (left foot: D C B).
+        // Centre divider between the two feet (after D C B).
         if (slot == 3)
         {
-            g.setColour (juce::Colours::white.withAlpha (0.25f));
-            g.drawLine (area.getX() + colW * slot, area.getY() + 4, area.getX() + colW * slot, area.getBottom() - 4, 1.0f);
+            const float dx = x0 + spanW * (3.0f / 7.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.35f));
+            g.drawLine (dx, lineY - gap - 2 * dash - 6, dx, lineY + gap + 2 * dash + 6, 2.0f);
         }
 
-        g.setColour (juce::Colours::white.withAlpha (0.25f));
-        g.drawLine (cx, rowY[0], cx, rowY[2], 1.5f);
+        auto strokeFor = [&] (int offset)
+        {
+            if (offset < 0) return juce::Line<float> (cx, lineY - gap, cx, lineY - gap - 2 * dash); // flat: above
+            if (offset > 0) return juce::Line<float> (cx, lineY + gap, cx, lineY + gap + 2 * dash); // sharp: below
+            return juce::Line<float> (cx, lineY - dash, cx, lineY + dash);                          // natural: through
+        };
 
         const int reqOffset = requestedDiagram[static_cast<size_t> (letter)];
         const int soundOffset = soundingDiagram[static_cast<size_t> (letter)];
         const bool inTransit = reqOffset != soundOffset;
 
-        auto dotAt = [&] (int offset, bool filled)
+        // Ghost of the requested position while a pedal is still in transit.
+        if (inTransit)
         {
-            const float y = rowY[static_cast<size_t> (juce::jlimit (0, 2, offset + 1))];
-            const juce::Rectangle<float> r (cx - 7.0f, y - 7.0f, 14.0f, 14.0f);
-            if (filled)
-                g.fillEllipse (r);
-            else
-                g.drawEllipse (r, 2.0f);
-        };
+            const auto r = strokeFor (reqOffset);
+            g.setColour (kAmber.withAlpha (0.5f));
+            g.drawLine (r.getStartX(), r.getStartY(), r.getEndX(), r.getEndY(), 2.0f);
+        }
 
+        const auto s = strokeFor (soundOffset);
         g.setColour (inTransit ? kAmber : kAccent);
-        dotAt (reqOffset, false);          // requested: outline
-        dotAt (soundOffset, true);         // sounding: filled
+        g.drawLine (s.getStartX(), s.getStartY(), s.getEndX(), s.getEndY(), 3.5f);
 
+        // Letter under the pedal.
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         g.drawText (juce::String::charToString ((juce::juce_wchar) kLetters[letter]),
-                    juce::Rectangle<float> (cx - 10.0f, area.getBottom() - 16.0f, 20.0f, 14.0f),
+                    juce::Rectangle<float> (cx - 10.0f, area.getBottom() - 15.0f, 20.0f, 13.0f),
                     juce::Justification::centred);
     }
 }
