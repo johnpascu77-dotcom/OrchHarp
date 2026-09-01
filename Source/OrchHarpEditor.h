@@ -98,9 +98,9 @@ private:
     juce::ComboBox glissRingBox;
 
     juce::Label triggerGlissLabel;
-    juce::Label glissTrigZoneLabel, glissRunDirLabel, glissRunSpanLabel, glissRunDurLabel;
+    juce::Label glissTrigZoneLabel, glissRunDirLabel, glissRunSpanLabel, glissRunDurLabel, glissRunAnchorLabel;
     juce::Slider glissTrigLoSlider, glissTrigHiSlider, glissRunSpanSlider;
-    juce::ComboBox glissRunDirectionBox, glissRunDurationBox;
+    juce::ComboBox glissRunDirectionBox, glissRunDurationBox, glissRunAnchorBox;
 
     juce::Label statusLabel;
 
@@ -116,7 +116,7 @@ private:
     std::unique_ptr<SliderAttachment> glissCcAttachment, glissLoStringAttachment, glissHiStringAttachment, glissBaseOctaveAttachment;
     std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment, glissRunSpanAttachment;
     std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment;
-    std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissRunDirectionAttachment, glissRunDurationAttachment;
+    std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissRunDirectionAttachment, glissRunDurationAttachment, glissRunAnchorAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OrchHarpAudioProcessorEditor)
 };

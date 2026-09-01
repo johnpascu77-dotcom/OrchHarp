@@ -103,6 +103,7 @@ private:
     std::atomic<float>* glissRunDirectionParam = nullptr;
     std::atomic<float>* glissRunSpanParam = nullptr;
     std::atomic<float>* glissRunDurationParam = nullptr;
+    std::atomic<float>* glissRunAnchorParam = nullptr;
 
     // Typed handles for guarded write-back from CC / bank recall / nudge.
     std::array<juce::AudioParameterChoice*, 7> pedalChoice { };

@@ -302,13 +302,17 @@ downstream. Gliss notes are emitted on channel 1.
 ### Trigger-gesture glissando — BUILT (Phase 2a, 2026-09-01)
 
 `glissTrigLo` / `glissTrigHi` note zone (0 / 0 = off). A note-on in the zone is
-consumed and schedules a run: start = `ohrp::noteToNearestStringIndex` of the
-trigger pitch, `span = glissRunSpan * (0.25 + 0.75·vel/127)` strings,
-`glissRunDirection` (Up / Down / Up-Down / Down-Up), spread evenly over
-`glissRunDuration` (1/16…1 bar, 4/4 assumed). Scheduled events carry a **string
-index**, resolved to a pitch at emission time, so a pedal change mid-run
-recolours the tail. Monophonic / Ring per `glissRing`, same as the contour
-engine. Scheduler = a ppq-sorted `pendingGliss` vector drained each block.
+consumed and schedules a run. Start = `glissRunAnchor`: *Trigger Note*
+(`noteToNearestStringIndex` of the trigger pitch, clamped to the window) /
+*Low String* / *High String*. `span = glissRunSpan * (0.25 + 0.75·vel/127)`
+strings, `glissRunDirection` (Up / Down / Up-Down / Down-Up), spread evenly over
+`glissRunDuration` (1/16…1 bar, 4/4 assumed). Every index is **clamped to
+`[min(glissLoString,glissHiString), max(...)]`** with consecutive duplicates
+dropped, so a run stops at the configured string instead of flooring at MIDI 0.
+Scheduled events carry a **string index**, resolved to a pitch at emission time,
+so a pedal change mid-run recolours the tail. `glissBaseOctave` is 0..7.
+Monophonic / Ring per `glissRing`. Scheduler = a ppq-sorted `pendingGliss`
+vector drained each block.
 
 ### Pedal-change markers — Phase 2b, DEPRIORITISED (2026-09-01)
 

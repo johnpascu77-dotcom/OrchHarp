@@ -83,6 +83,7 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     glissRunDirectionParam = parameters.getRawParameterValue ("glissRunDirection");
     glissRunSpanParam      = parameters.getRawParameterValue ("glissRunSpan");
     glissRunDurationParam  = parameters.getRawParameterValue ("glissRunDuration");
+    glissRunAnchorParam    = parameters.getRawParameterValue ("glissRunAnchor");
 
     bankSlotInt = dynamic_cast<juce::AudioParameterInt*> (parameters.getParameter ("bankSlot"));
 
@@ -162,7 +163,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "glissHiString", 1 }, "Gliss High String", 0, 55, 35));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
-        juce::ParameterID { "glissBaseOctave", 1 }, "Gliss Base Octave", 0, 4, 2));
+        juce::ParameterID { "glissBaseOctave", 1 }, "Gliss Base Octave", 0, 7, 2));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "glissVelCc", 1 }, "Gliss Velocity CC# (0 = fixed)", 0, 127, 0));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
@@ -186,6 +187,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "glissRunDuration", 1 }, "Gliss Run Duration",
         juce::StringArray { "1/16", "1/8", "1/4", "1/2", "1 bar" }, 2));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "glissRunAnchor", 1 }, "Gliss Run Start",
+        juce::StringArray { "Trigger Note", "Low String", "High String" }, 0));
 
     return { params.begin(), params.end() };
 }
@@ -323,7 +327,7 @@ double OrchHarpAudioProcessor::minChangeIntervalInBeats() const
 int OrchHarpAudioProcessor::glissBaseOctave() const
 {
     return glissBaseOctaveParam != nullptr
-        ? juce::jlimit (0, 4, juce::roundToInt (glissBaseOctaveParam->load())) : 2;
+        ? juce::jlimit (0, 7, juce::roundToInt (glissBaseOctaveParam->load())) : 2;
 }
 
 ohrp::Diagram OrchHarpAudioProcessor::getSoundingDiagramForUi() const
@@ -608,7 +612,21 @@ bool OrchHarpAudioProcessor::tryStartTriggerRun (int noteNumber, juce::uint8 vel
         return false; // 0/0 = trigger engine off
 
     const int baseOct = glissBaseOctave();
-    const int startS = ohrp::noteToNearestStringIndex (noteNumber, soundingDiagram, baseOct);
+
+    // The run stays inside the [low string, high string] window - so a run never
+    // silently floors on the bottom string, it stops at the string you set.
+    const int loS = juce::jlimit (0, 55, readNum (glissLoStringParam, 0));
+    const int hiS = juce::jlimit (0, 55, readNum (glissHiStringParam, 35));
+    const int winLo = juce::jmin (loS, hiS);
+    const int winHi = juce::jmax (loS, hiS);
+
+    // Where the run begins (design: decoupled from the trigger pitch so a
+    // downward gliss can start at the top wherever the trigger note sits).
+    const int anchor = juce::jlimit (0, 2, readNum (glissRunAnchorParam, 0));
+    const int startS = anchor == 1 ? winLo
+                     : anchor == 2 ? winHi
+                     : juce::jlimit (winLo, winHi,
+                                     ohrp::noteToNearestStringIndex (noteNumber, soundingDiagram, baseOct));
 
     const int spanBase = juce::jlimit (1, 48, readNum (glissRunSpanParam, 21));
     const int span = juce::jmax (1, juce::roundToInt (spanBase * (0.25f + 0.75f * velocity / 127.0f)));
@@ -616,11 +634,15 @@ bool OrchHarpAudioProcessor::tryStartTriggerRun (int noteNumber, juce::uint8 vel
     const int dir = juce::jlimit (0, 3, readNum (glissRunDirectionParam, 0));
 
     std::vector<int> indices;
-    auto ramp = [&indices] (int from, int to)
+    auto ramp = [&indices, winLo, winHi] (int from, int to)
     {
         const int step = to >= from ? 1 : -1;
         for (int s = from; s != to + step; s += step)
-            indices.push_back (s);
+        {
+            const int clamped = juce::jlimit (winLo, winHi, s);
+            if (indices.empty() || indices.back() != clamped)
+                indices.push_back (clamped); // clamp to the window, drop repeats
+        }
     };
 
     switch (dir)
@@ -631,7 +653,7 @@ bool OrchHarpAudioProcessor::tryStartTriggerRun (int noteNumber, juce::uint8 vel
         default: ramp (startS, startS + span); break;                     // Up
     }
 
-    if (indices.empty())
+    if (indices.size() < 2)
         return true;
 
     const int durIdx = juce::jlimit (0, 4, readNum (glissRunDurationParam, 2));

@@ -235,8 +235,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
     setResizable (true, true);
-    setResizeLimits (680, 820, 1200, 1280);
-    setSize (780, 1000);
+    setResizeLimits (680, 840, 1200, 1320);
+    setSize (780, 1030);
 
     auto& params = audioProcessor.getParameters();
 
@@ -479,7 +479,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     initIncDec (glissCcSlider, 0, 127);
     initIncDec (glissLoStringSlider, 0, 55);
     initIncDec (glissHiStringSlider, 0, 55);
-    initIncDec (glissBaseOctaveSlider, 0, 4);
+    initIncDec (glissBaseOctaveSlider, 0, 7);
     addAndMakeVisible (glissCcSlider);
     addAndMakeVisible (glissLoStringSlider);
     addAndMakeVisible (glissHiStringSlider);
@@ -532,6 +532,14 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     styleBox (glissRunDurationBox);
     addAndMakeVisible (glissRunDurationBox);
     glissRunDurationAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDuration", glissRunDurationBox);
+
+    glissRunAnchorLabel.setText ("Run starts from", juce::dontSendNotification);
+    styleLabel (glissRunAnchorLabel, 12.0f);
+    addAndMakeVisible (glissRunAnchorLabel);
+    glissRunAnchorBox.addItemList ({ "Trigger Note", "Low String", "High String" }, 1);
+    styleBox (glissRunAnchorBox);
+    addAndMakeVisible (glissRunAnchorBox);
+    glissRunAnchorAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunAnchor", glissRunAnchorBox);
 
     statusLabel.setJustificationType (juce::Justification::centred);
     statusLabel.setColour (juce::Label::textColourId, kAmber);
@@ -724,6 +732,12 @@ void OrchHarpAudioProcessorEditor::resized()
         row.removeFromLeft (8);
         glissRunDurationBox.setBounds (row.removeFromLeft (100));
     }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        glissRunAnchorLabel.setBounds (row.removeFromLeft (210));
+        glissRunAnchorBox.setBounds (row.removeFromLeft (130));
+    }
 
     auto footer = getLocalBounds().reduced (20, 0);
     footer.removeFromBottom (10);
@@ -751,6 +765,7 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     glissRingBox.setEnabled (pedalMode);
     glissRunDirectionBox.setEnabled (pedalMode);
     glissRunDurationBox.setEnabled (pedalMode);
+    glissRunAnchorBox.setEnabled (pedalMode);
 
     refreshBankCells();
     updateStatus();

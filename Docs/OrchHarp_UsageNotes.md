@@ -114,8 +114,9 @@ the mapped string changes.
 - **lo string / hi string** — the run's range, as absolute string indices
   (0 = the low C, each step = one string). Set **lo > hi** for a contour that
   descends as the CC rises.
-- **base oct** — where string index 0 sits (2 = MIDI 24 / C1). Nudge to move the
-  whole run up or down an octave.
+- **base oct** — where string index 0 sits (0–7; 2 = MIDI 24 / C1). Moves the
+  whole string→pitch mapping up or down an octave at a time. Shared with the
+  Trigger engine.
 - **Vel CC#** — a second CC for live velocity. `0` = use the fixed value.
 - **fixed vel** — velocity when Vel CC# is 0.
 - **Ring** — *Monophonic*: each new string cuts the previous note (clean run,
@@ -138,7 +139,20 @@ One note in a zone sprays a whole run — the classic notated gliss, no drawing.
   scales it**: a soft note ≈ a quarter of the span, full velocity = the whole
   span.
 - **Run duration** — total length, tempo-synced (1/16 … 1 bar, 4/4 assumed).
+- **Run starts from** —
+  - *Trigger Note* — the string nearest the note you played (clamped into the
+    lo/hi-string window). Natural when the trigger zone is in the playing range.
+  - *Low String* — always start at **Gliss Low String**. Pair with **Up**.
+  - *High String* — always start at **Gliss High String**. Pair with **Down** —
+    a downward gliss then starts at the top no matter where the trigger note
+    sits.
 
-The run starts from the string nearest the note you played and follows the
-current diagram; a pedal change mid-run recolours the tail. Ring / Monophonic
-is shared with the Contour engine.
+The run is kept **inside the Gliss Low String … High String window** (shared
+with the Contour engine) — it never silently floors on the bottom string, it
+stops at the string you set. It follows the current diagram; a pedal change
+mid-run recolours the tail. Ring / Monophonic is shared with the Contour engine.
+
+So for a big descending gliss: set **Gliss High String** where you want the top,
+**Gliss Low String** where you want the bottom, **Run direction = Down**, **Run
+starts from = High String**, **Run span** large. Base Octave (0–7) moves the
+whole string→pitch mapping if the run sits in the wrong register.
