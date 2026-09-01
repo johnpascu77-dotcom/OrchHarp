@@ -41,18 +41,17 @@ namespace
         return juce::String (names[((n % 12) + 12) % 12]) + juce::String (n / 12 - 1);
     }
 
-    juce::String offsetGlyph (int offset)
-    {
-        return offset < 0 ? juce::String (juce::CharPointer_UTF8 ("\xe2\x99\xad"))   // flat
-             : offset > 0 ? juce::String (juce::CharPointer_UTF8 ("\xe2\x99\xaf"))   // sharp
-                          : juce::String (juce::CharPointer_UTF8 ("\xe2\x99\xae"));  // natural
-    }
-
+    // Compact ASCII spelling of a diagram, e.g. "C# D Eb F# G Ab B#".
+    // (Kept ASCII on purpose - the music glyphs mojibake through JUCE's
+    // system-codepage char* handling on Windows.)
     juce::String diagramText (const ohrp::Diagram& d)
     {
         juce::String s;
         for (int i = 0; i < 7; ++i)
-            s << kLetters[i] << offsetGlyph (d[static_cast<size_t> (i)]);
+        {
+            const int o = d[static_cast<size_t> (i)];
+            s << (i ? " " : "") << kLetters[i] << (o < 0 ? "b" : o > 0 ? "#" : "");
+        }
         return s;
     }
 
@@ -87,10 +86,10 @@ void PedalDiagramComponent::paint (juce::Graphics& g)
     const std::array<float, 3> rowY { topY, (topY + botY) * 0.5f, botY }; // flat / natural / sharp
 
     g.setColour (juce::Colours::white.withAlpha (0.6f));
-    g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("\xe2\x99\xad", juce::Rectangle<float> (area.getX(), rowY[0] - 8, 16, 16), juce::Justification::centred);
-    g.drawText ("\xe2\x99\xae", juce::Rectangle<float> (area.getX(), rowY[1] - 8, 16, 16), juce::Justification::centred);
-    g.drawText ("\xe2\x99\xaf", juce::Rectangle<float> (area.getX(), rowY[2] - 8, 16, 16), juce::Justification::centred);
+    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    g.drawText ("b", juce::Rectangle<float> (area.getX() - 2, rowY[0] - 8, 16, 16), juce::Justification::centred);
+    g.drawText ("n", juce::Rectangle<float> (area.getX() - 2, rowY[1] - 8, 16, 16), juce::Justification::centred);
+    g.drawText ("#", juce::Rectangle<float> (area.getX() - 2, rowY[2] - 8, 16, 16), juce::Justification::centred);
 
     for (int slot = 0; slot < 7; ++slot)
     {
@@ -253,7 +252,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
             std::make_unique<ComboBoxAttachment> (params, pedalIds[static_cast<size_t> (i)], box);
     }
 
-    bankLabel.setText ("Bank  (click recall  \xc2\xb7  shift-click save  \xc2\xb7  right-click rename/colour)", juce::dontSendNotification);
+    bankLabel.setText ("Bank   (click = recall   /   shift-click = save   /   right-click = rename + colour)", juce::dontSendNotification);
     styleLabel (bankLabel, 13.0f, true);
     addAndMakeVisible (bankLabel);
 
