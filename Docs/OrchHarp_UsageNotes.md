@@ -42,10 +42,11 @@ transform.
 
 Turn **Voicing on** to reduce the input to what a harpist could physically
 grab. The **Left hand** / **Right hand** buttons set that instance's hand,
-range and protect in one click (concert-harp values: LH C1–C5 / Keep Lowest,
-RH G2–G7 / Keep Highest); you still pick the split mode yourself. Notes are
-grouped by onset (**onset window ms** ≈ one hand placement) and each group is
-filtered:
+range, protect and **Split = Block** in one click (concert-harp values: LH
+C1–C5 / Keep Lowest, RH G2–G7 / Keep Highest). Switch the split to **Channel**
+afterward only if your source is already hand-separated onto MIDI ch 1 / 2.
+Notes are grouped by onset (**onset window ms** ≈ one hand placement) and each
+group is filtered:
 
 - **Hand** — Both / Left / Right. **Split** — how a chord is divided between the
   hands: *Block* (this hand takes its half by pitch), *Interlock* (alternating

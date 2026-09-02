@@ -1151,7 +1151,7 @@ void OrchHarpAudioProcessorEditor::updateStatus()
     if (in >= 0)
     {
         text << "In " << noteName (in) << " -> ";
-        if (action == 3)
+        if (out < 0 || action == 3)
             text << "(dropped)";
         else if (action == 4)
             text << "(control)";

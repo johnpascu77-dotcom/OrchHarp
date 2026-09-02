@@ -346,6 +346,9 @@ void OrchHarpAudioProcessor::applyHandPreset (bool left)
     setInt   ("handHiNote", left ? 72 : 103);  // C5  /  G7
     setChoice ("protect", left ? 1 : 2);       // Keep Lowest  /  Keep Highest
     setChoice ("outOfRange", 1);               // Fold Octave
+    setChoice ("splitMode", 1);                // Block - works from any single-channel
+                                               // source; switch to Channel if yours
+                                               // is genuinely hand-separated
 }
 
 void OrchHarpAudioProcessor::renameBankSlot (int index, const juce::String& name)
