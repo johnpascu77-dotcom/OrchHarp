@@ -129,6 +129,7 @@ private:
     juce::Label voicingHandLabel, voicingSplitLabel, voicingCapLabel, voicingRangeLabel,
                 voicingSpanLabel, voicingProtectLabel;
     juce::ToggleButton voicingEnableButton;
+    juce::TextButton leftHandPresetButton { "Left hand" }, rightHandPresetButton { "Right hand" };
     juce::ComboBox handBox, splitModeBox, outOfRangeBox, overSpanBox, rollRateBox, protectBox;
     juce::Slider splitChanLeftSlider, splitChanRightSlider, maxVoicesSlider, onsetWindowSlider,
                  handLoNoteSlider, handHiNoteSlider, maxSpanSlider, outChannelSlider;

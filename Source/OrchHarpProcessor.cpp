@@ -316,6 +316,38 @@ void OrchHarpAudioProcessor::setBankSlot (int index, const ohrp::Diagram& offset
         bank[static_cast<size_t> (index)].name = name;
 }
 
+void OrchHarpAudioProcessor::applyHandPreset (bool left)
+{
+    // Concert harp: 47 strings C1..G7, 4 fingers per hand, big shared middle.
+    // Left hand owns the bottom + protects the bass; right hand owns the top
+    // + protects the melody. Ranges are edge-of-possible clamps, not comfort
+    // zones - the split mode carves the overlap.
+    const auto setChoice = [this] (const char* id, int index)
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (parameters.getParameter (id)))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (index)));
+            p->endChangeGesture();
+        }
+    };
+    const auto setInt = [this] (const char* id, int value)
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*> (parameters.getParameter (id)))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (value)));
+            p->endChangeGesture();
+        }
+    };
+
+    setChoice ("hand", left ? 1 : 2);
+    setInt   ("handLoNote", left ? 24 : 43);   // C1  /  G2
+    setInt   ("handHiNote", left ? 72 : 103);  // C5  /  G7
+    setChoice ("protect", left ? 1 : 2);       // Keep Lowest  /  Keep Highest
+    setChoice ("outOfRange", 1);               // Fold Octave
+}
+
 void OrchHarpAudioProcessor::renameBankSlot (int index, const juce::String& name)
 {
     const juce::SpinLock::ScopedLockType lock (bankLock);

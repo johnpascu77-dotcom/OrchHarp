@@ -37,8 +37,11 @@ Contour. Absolute mode is the normal transform.
 ## Voicing  (Voicing tab)  —  off by default
 
 Turn **Voicing on** to reduce the input to what a harpist could physically
-grab. Notes are grouped by onset (**onset window ms** ≈ one hand placement) and
-each group is filtered:
+grab. The **Left hand** / **Right hand** buttons set that instance's hand,
+range and protect in one click (concert-harp values: LH C1–C5 / Keep Lowest,
+RH G2–G7 / Keep Highest); you still pick the split mode yourself. Notes are
+grouped by onset (**onset window ms** ≈ one hand placement) and each group is
+filtered:
 
 - **Hand** — Both / Left / Right. **Split** — how a chord is divided between the
   hands: *Block* (this hand takes its half by pitch), *Interlock* (alternating
@@ -58,12 +61,30 @@ each group is filtered:
 ### Two-instance left/right rig
 
 Load **two** OrchHarp instances on the harp track (or parallel tracks). Feed
-both the same MIDI **and** the same pedal automation / CC49. Set one to
-**Hand = Left**, the other **Hand = Right**, both to the same **Split** /
-**Max voices** / **Onset window**. The split is deterministic, so the two
-instances carve up every chord identically with no link between them. Tag
-**Output channel** 1 and 2, send both into OrchCapture → Dorico shows the harp
-part as two voices (up / down stems).
+both the same MIDI **and** the same pedal automation / CC49 (both must sound the
+same diagram or they drift apart harmonically). Hit **Left hand** on one,
+**Right hand** on the other. Set both to the same **Split** / **Max voices** /
+**Onset window**. The split is deterministic, so the two instances carve up
+every chord identically with no link between them.
+
+- **Split = Channel** needs the *source* to already put left-hand notes on MIDI
+  ch 1 and right-hand on ch 2 (a Dorico two-stave export, or a Bitwig note-FX
+  splitting by pitch). Then leave **Output channel = 0** — ch 1 / 2 pass
+  straight through to Dorico as two voices.
+- **Split = Block** derives the hands from a single stream (Left takes the lower
+  notes of each chord, Right the upper). Set **Output channel** 1 and 2 to tag
+  them for Dorico's two voices (up / down stems).
+
+Then send both into OrchCapture → the merge is one harp part, two voices.
+
+### Contour range with Voicing on
+
+The **contour window** (Harp tab) bounds the generated line; the **hand range**
+(Voicing tab) then clamps each hand's slice. For a two-instance contour texture,
+set *both* instances' contour window to the whole intended register and let the
+hand ranges + split carve it. Note a **Monophonic** contour is one note per
+onset — Block split sends it all to the right hand; use **Stack** for a genuine
+two-handed contour.
 
 Voicing off = the plugin behaves exactly as before.
 

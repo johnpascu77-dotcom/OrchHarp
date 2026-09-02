@@ -59,6 +59,10 @@ public:
     void setBankSlot (int index, const ohrp::Diagram& offsets, const juce::String& name);
     void resetBankToFactory();
 
+    // One-click concert-harp hand envelope: sets hand / range / protect /
+    // out-of-range for the Voicing tab (splitMode is left to the user).
+    void applyHandPreset (bool left);
+
     // ---- UI status readouts (message thread; plain reads) -------------------
     int  getLastInputNoteForUi() const  { return lastInputNote.load(); }
     int  getLastOutputNoteForUi() const { return lastOutputNote.load(); }

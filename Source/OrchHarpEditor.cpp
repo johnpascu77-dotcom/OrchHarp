@@ -633,6 +633,15 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     addAndMakeVisible (voicingEnableButton);
     voicingEnableAttachment = std::make_unique<ButtonAttachment> (params, "voicingEnable", voicingEnableButton);
 
+    for (auto* b : { &leftHandPresetButton, &rightHandPresetButton })
+    {
+        b->setColour (juce::TextButton::buttonColourId, kPanel);
+        b->setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+        addAndMakeVisible (*b);
+    }
+    leftHandPresetButton.onClick  = [this] { audioProcessor.applyHandPreset (true); };
+    rightHandPresetButton.onClick = [this] { audioProcessor.applyHandPreset (false); };
+
     voicingHandLabel.setText ("Hand / split", juce::dontSendNotification);
     styleLabel (voicingHandLabel, 12.0f);
     addAndMakeVisible (voicingHandLabel);
@@ -740,7 +749,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     for (auto& c : bankCells)         harpPanel.addAndMakeVisible (c);
 
     reparent (voicingPanel, {
-        &voicingEnableButton, &voicingHandLabel, &handBox, &splitModeBox,
+        &voicingEnableButton, &leftHandPresetButton, &rightHandPresetButton,
+        &voicingHandLabel, &handBox, &splitModeBox,
         &voicingSplitLabel, &splitChanLeftSlider, &splitChanRightSlider,
         &voicingCapLabel, &maxVoicesSlider, &onsetWindowSlider,
         &voicingRangeLabel, &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox,
@@ -1015,7 +1025,14 @@ void OrchHarpAudioProcessorEditor::layoutVoicingTab()
     const int lblW = 210;
     const int fld  = 108;
 
-    voicingEnableButton.setBounds (area.removeFromTop (26).removeFromLeft (140));
+    {
+        auto row = area.removeFromTop (26);
+        voicingEnableButton.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (20);
+        leftHandPresetButton.setBounds (row.removeFromLeft (100));
+        row.removeFromLeft (8);
+        rightHandPresetButton.setBounds (row.removeFromLeft (100));
+    }
     area.removeFromTop (8);
 
     {
@@ -1107,6 +1124,7 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     const bool chanSplit = audioProcessor.getParameters().getRawParameterValue ("splitMode")->load() >= 2.5f;
     const bool rolling = audioProcessor.getParameters().getRawParameterValue ("overSpan")->load() >= 1.5f;
     for (juce::Component* c : std::initializer_list<juce::Component*> {
+             &leftHandPresetButton, &rightHandPresetButton,
              &handBox, &splitModeBox, &maxVoicesSlider, &onsetWindowSlider,
              &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox, &maxSpanSlider,
              &overSpanBox, &protectBox, &outChannelSlider,
