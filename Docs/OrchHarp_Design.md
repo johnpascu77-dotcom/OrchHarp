@@ -310,8 +310,10 @@ changes. Velocity: `glissVelCc` (0 = fixed `glissVelocity`). `glissRing`:
 Monophonic / Ring. `glissRelease` (Hold / 1/8 / 1/4 / 1/2 / 1 bar): a
 beat-accumulator (`glissIdleBeats`) releases the held note(s) after that much
 CC stillness — so the last note of a drawn ramp gets a real duration in the
-score. `glissCc` / `glissVelCc` are consumed, not passed downstream. Notes on
-channel 1.
+score. `glissCc` / `glissVelCc` are consumed, not passed downstream. Gliss notes
+emit on `glissEmitChannel` — latched per block from `outChannel` (>0 → that
+channel, else ch 1) — the same tag `emitResolved` uses, so a two-instance rig
+keeps each hand's gliss in its own Dorico voice.
 
 ### Trigger-gesture glissando — BUILT (Phase 2a, revised 2026-09-01)
 

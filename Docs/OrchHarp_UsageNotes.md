@@ -64,7 +64,9 @@ group is filtered:
   (bass + top, drop from the inside), *Keep Lowest*, *Keep Highest*, *None*.
   Protect always wins over span.
 - **Output channel** — 0 keeps the source channel; set a value to tag all this
-  instance's output to one channel.
+  instance's output — **voiced notes and the glissando engines** — to one
+  channel. In a two-instance rig this is what puts each hand (and its gliss) on
+  its own Dorico voice. Stays editable with Voicing off, for a gliss-only rig.
 
 ### Two-instance left/right rig
 
