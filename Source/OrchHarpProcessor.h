@@ -194,6 +194,7 @@ private:
 
     // ---- Glissando engine ----
     static constexpr int kGlissBaseOctave = 2; // absolute string index 0 -> ~MIDI 24
+    int glissEmitChannel = 1;            // latched per block: outChannel if set, else 1
     int lastGlissString = std::numeric_limits<int>::min();
     int lastGlissNote = -1;              // Monophonic contour: the ringing gliss note
     int glissVelValue = 96;              // latched from glissVelCc

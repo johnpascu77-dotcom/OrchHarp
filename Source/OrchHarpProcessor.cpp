@@ -267,7 +267,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::ParameterID { "protect", 1 }, "Protect",
         juce::StringArray { "None", "Keep Lowest", "Keep Highest", "Keep Both Ends" }, 3));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
-        juce::ParameterID { "outChannel", 1 }, "Output Channel (0 = source)", 0, 16, 0));
+        juce::ParameterID { "outChannel", 1 }, "Output Channel (0 = source; tags gliss)", 0, 16, 0));
 
     return { params.begin(), params.end() };
 }
@@ -517,12 +517,12 @@ void OrchHarpAudioProcessor::prepareToPlay (double newSampleRate, int)
 void OrchHarpAudioProcessor::flushGlissNotes (juce::MidiBuffer& output, int samplePosition)
 {
     if (lastGlissNote >= 0)
-        output.addEvent (juce::MidiMessage::noteOff (1, lastGlissNote), samplePosition);
+        output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, lastGlissNote), samplePosition);
     if (runLastNote >= 0 && runLastNote != lastGlissNote)
-        output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePosition);
+        output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, runLastNote), samplePosition);
     for (int note : glissRingNotes)
         if (note != lastGlissNote && note != runLastNote)
-            output.addEvent (juce::MidiMessage::noteOff (1, note), samplePosition);
+            output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, note), samplePosition);
 
     lastGlissNote = -1;
     runLastNote = -1;
@@ -550,12 +550,12 @@ void OrchHarpAudioProcessor::releaseIdleGlissNotes (juce::MidiBuffer& output, in
         return;
 
     if (lastGlissNote >= 0)
-        output.addEvent (juce::MidiMessage::noteOff (1, lastGlissNote), samplePosition);
+        output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, lastGlissNote), samplePosition);
     if (runLastNote >= 0 && runLastNote != lastGlissNote)
-        output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePosition);
+        output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, runLastNote), samplePosition);
     for (int note : glissRingNotes)
         if (note != lastGlissNote && note != runLastNote)
-            output.addEvent (juce::MidiMessage::noteOff (1, note), samplePosition);
+            output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, note), samplePosition);
 
     lastGlissNote = -1;
     runLastNote = -1;
@@ -767,19 +767,19 @@ bool OrchHarpAudioProcessor::handleGlissCc (const juce::MidiMessage& message, in
     if (! ring)
     {
         if (lastGlissNote >= 0 && lastGlissNote != note)
-            output.addEvent (juce::MidiMessage::noteOff (1, lastGlissNote), samplePosition);
+            output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, lastGlissNote), samplePosition);
         if (lastGlissNote != note)
-            output.addEvent (juce::MidiMessage::noteOn (1, note, static_cast<juce::uint8> (vel)), samplePosition);
+            output.addEvent (juce::MidiMessage::noteOn (glissEmitChannel, note, static_cast<juce::uint8> (vel)), samplePosition);
         lastGlissNote = note;
     }
     else
     {
         if (glissRingNotes.size() >= static_cast<size_t> (kMaxRingingGliss))
         {
-            output.addEvent (juce::MidiMessage::noteOff (1, glissRingNotes.front()), samplePosition);
+            output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, glissRingNotes.front()), samplePosition);
             glissRingNotes.erase (glissRingNotes.begin());
         }
-        output.addEvent (juce::MidiMessage::noteOn (1, note, static_cast<juce::uint8> (vel)), samplePosition);
+        output.addEvent (juce::MidiMessage::noteOn (glissEmitChannel, note, static_cast<juce::uint8> (vel)), samplePosition);
         glissRingNotes.push_back (note);
         lastGlissNote = note;
     }
@@ -894,7 +894,7 @@ void OrchHarpAudioProcessor::drainPendingGliss (juce::MidiBuffer& output, double
             // Terminal release marker (pushed as {ppq, -1, 0}).
             if (! ring && runLastNote >= 0)
             {
-                output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePos);
+                output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, runLastNote), samplePos);
                 runLastNote = -1;
             }
             continue;
@@ -906,18 +906,18 @@ void OrchHarpAudioProcessor::drainPendingGliss (juce::MidiBuffer& output, double
         if (! ring)
         {
             if (runLastNote >= 0 && runLastNote != note)
-                output.addEvent (juce::MidiMessage::noteOff (1, runLastNote), samplePos);
-            output.addEvent (juce::MidiMessage::noteOn (1, note, ev.velocity), samplePos);
+                output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, runLastNote), samplePos);
+            output.addEvent (juce::MidiMessage::noteOn (glissEmitChannel, note, ev.velocity), samplePos);
             runLastNote = note;
         }
         else
         {
             if (glissRingNotes.size() >= static_cast<size_t> (kMaxRingingGliss))
             {
-                output.addEvent (juce::MidiMessage::noteOff (1, glissRingNotes.front()), samplePos);
+                output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, glissRingNotes.front()), samplePos);
                 glissRingNotes.erase (glissRingNotes.begin());
             }
-            output.addEvent (juce::MidiMessage::noteOn (1, note, ev.velocity), samplePos);
+            output.addEvent (juce::MidiMessage::noteOn (glissEmitChannel, note, ev.velocity), samplePos);
             glissRingNotes.push_back (note);
         }
 
@@ -1346,6 +1346,15 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     const double blockEndPpq = blockStartPpq + numSamples * ppqPerSample;
     const double blockBeats = numSamples * ppqPerSample;
     glissIdleBeats = juce::jmin (glissIdleBeats + blockBeats, 1.0e6);
+
+    // Glissando notes follow the same output-channel tag as voiced notes, so a
+    // two-instance L/R rig lands each hand's gliss on its own Dorico voice.
+    // Latched once per block so a note-on and its note-off never disagree.
+    {
+        const int forcedCh = outChannelParam != nullptr
+            ? juce::jlimit (0, 16, juce::roundToInt (outChannelParam->load())) : 0;
+        glissEmitChannel = forcedCh > 0 ? forcedCh : 1;
+    }
 
     // Chromatic = total bypass: every message passes through untouched.
     const bool chromatic = modeParam != nullptr && modeParam->load() >= 0.5f;

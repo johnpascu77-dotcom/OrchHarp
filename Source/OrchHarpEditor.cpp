@@ -706,7 +706,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     addAndMakeVisible (rollRateBox);
     rollRateAttachment = std::make_unique<ComboBoxAttachment> (params, "rollRate", rollRateBox);
 
-    voicingProtectLabel.setText ("Protect / output channel", juce::dontSendNotification);
+    voicingProtectLabel.setText ("Protect / out channel (tags gliss too)", juce::dontSendNotification);
     styleLabel (voicingProtectLabel, 12.0f);
     addAndMakeVisible (voicingProtectLabel);
     protectBox.addItemList ({ "None", "Keep Lowest", "Keep Highest", "Keep Both Ends" }, 1);
@@ -1134,9 +1134,12 @@ void OrchHarpAudioProcessorEditor::timerCallback()
              &leftHandPresetButton, &rightHandPresetButton,
              &handBox, &splitModeBox, &maxVoicesSlider, &onsetWindowSlider,
              &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox, &maxSpanSlider,
-             &overSpanBox, &protectBox, &outChannelSlider,
+             &overSpanBox, &protectBox,
              &voicingHandLabel, &voicingCapLabel, &voicingRangeLabel, &voicingSpanLabel, &voicingProtectLabel })
         c->setEnabled (voicing);
+    // Output channel also tags the glissando engines, so it stays live even
+    // with voicing off (a two-instance gliss rig with no chord reduction).
+    outChannelSlider.setEnabled (true);
     splitNoteSlider.setEnabled (voicing && pitchSplit);
     splitChanLeftSlider.setEnabled (voicing && chanSplit);
     splitChanRightSlider.setEnabled (voicing && chanSplit);
