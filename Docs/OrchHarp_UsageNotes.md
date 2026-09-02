@@ -105,6 +105,24 @@ a polyphonic input).
 
 Voicing off = the plugin behaves exactly as before.
 
+## Pedal-change markers in the score
+
+OrchHarp can hand its pedal changes to OrchCapture so they land as text in the
+Dorico score (instead of leaning on Dorico's semi-automatic *Calculate Harp
+Pedals*). Nothing to switch on:
+
+- While the transport runs, OrchHarp logs every pedal-diagram change of the take.
+- On **stop**, it writes them to a temp file (`orchharp-pedals-<id>.txt`).
+- When **OrchCapture** next exports (its auto-save-on-stop, or a manual drag-out),
+  it folds any fresh OrchHarp file into its section markers — so the score shows
+  `Harp pedals: Db C B | E F# G Ab` at each change, in the same board notation
+  Dorico's harp-pedal popover uses (copy it straight across).
+
+It logs the **requested** diagram (the pedal move you automated), not the
+governor's intermediate steps, and assumes 4/4 for the bar position — same as
+the rest of OrchHarp and OrchCapture. Two instances of a L/R rig both write
+their file; OrchCapture de-duplicates identical changes.
+
 ## The pedal diagram
 
 The seven strokes are the harp's seven pedals, in the real board order

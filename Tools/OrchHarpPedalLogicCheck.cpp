@@ -334,6 +334,18 @@ int main()
         check (spanned.front() == 0 && spanned.back() == 3,
                "span clamp with both ends protected: protect wins, ends kept");
 
+        // Board-order pedal-marker spelling for OrchCapture.
+        check (harpPedalText (kAllNatural) == "D C B | E F G A",
+               "harpPedalText: all-natural is board order D C B | E F G A");
+        {
+            Diagram d = kAllNatural;
+            d[0] = -1; // C flat
+            d[3] = 1;  // F sharp
+            d[5] = -1; // A flat
+            check (harpPedalText (d) == "D Cb B | E F# G Ab",
+                   "harpPedalText: flats/sharps spelled, feet split by |");
+        }
+
         // hand=Both ignores splitMode.
         VoiceConfig both { };
         both.hand = 0; both.splitMode = 1; both.maxVoices = 12; both.maxSpanSemis = 36;

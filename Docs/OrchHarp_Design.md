@@ -350,9 +350,9 @@ OrchCapture. Revisit only if that proves painful. Not building it for now.
 |---|---|
 | **1 — transformer** ✅ | String model, white-key → string, black-key modes, Chromatic bypass, 7 pedal params + bank + family/variant helper, the playability governor, CC49 + black-key (direct + step) triggers, live diagram readout. Pure `OrchHarpPedalLogic` + `OrchHarpPedalLogicCheck`. Factory bank. Built + live-tested 2026-09-01. |
 | **2a — glissando engines** ✅ | Contour-follower gliss + trigger-gesture gliss. Built 2026-09-01. |
-| ~~**2b — notation**~~ | Pedal-change markers → OrchCapture. **Deprioritised** — user will derive pedal diagrams downstream in music21 if needed, not through OrchCapture. |
+| **2b — notation** ✅ | Pedal-change markers → OrchCapture. Built 2026-09-03 via a temp-file sidecar: on transport stop OrchHarp writes the take's requested-diagram changes as `bar:label` lines to `%TEMP%/orchharp-pedals-<tag>.txt` (off the audio thread, `MarkerWriter` juce::Thread); OrchCapture's `buildMergedExportOptions` folds fresh files into its section markers, de-duplicating. Board-order spelling from `ohrp::harpPedalText`. 4/4 assumed both sides. |
 | **3 — voicing + contour** ✅ | Function-weighted voicing (Hand L/R, poly cap, span→Roll, deterministic split, protect melody/bass, `outChannel` tag → Dorico voices) + Contour pitch mode (re-quantise a melody's shape to the diagram's degrees). Built 2026-09-02. See §12. |
-| **later** | MC 2-CC diagram broadcast; diagram drift + seed; bisbigliando; harmonics tag; humanize. |
+| **later** | MC 2-CC diagram broadcast (live diagram *control* from Composer Mastermind, distinct from 2b's after-the-fact markers); diagram drift + seed; bisbigliando; harmonics tag; humanize. |
 
 ## 11. Build
 

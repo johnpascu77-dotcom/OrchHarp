@@ -47,6 +47,29 @@ namespace
 
 // ============================================================================
 
+// Off-thread writer for the pedal-marker sidecar file. Sleeps until the audio
+// thread signals a transport stop, then flushes the take's diagram log to a
+// well-known temp file for OrchCapture to pick up.
+struct OrchHarpAudioProcessor::MarkerWriter : juce::Thread
+{
+    explicit MarkerWriter (OrchHarpAudioProcessor& ownerIn)
+        : juce::Thread ("OrchHarpPedalMarkers"), owner (ownerIn) {}
+
+    void run() override
+    {
+        while (! threadShouldExit())
+        {
+            wake.wait (-1);
+            if (threadShouldExit())
+                break;
+            owner.writePedalMarkerFile();
+        }
+    }
+
+    OrchHarpAudioProcessor& owner;
+    juce::WaitableEvent wake;
+};
+
 OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     : AudioProcessor (BusesProperties()),
       parameters (*this, nullptr, "OrchHarpParameters", createParameterLayout())
@@ -115,6 +138,45 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
 
     soundingDiagram = readRequestedDiagram();
     storeReadoutDiagrams (soundingDiagram);
+
+    pedalMarkerTag = juce::String::toHexString (juce::Random::getSystemRandom().nextInt())
+                        .paddedLeft ('0', 8);
+    markerWriter = std::make_unique<MarkerWriter> (*this);
+    markerWriter->startThread();
+}
+
+OrchHarpAudioProcessor::~OrchHarpAudioProcessor()
+{
+    if (markerWriter != nullptr)
+    {
+        markerWriter->signalThreadShouldExit();
+        markerWriter->wake.signal();
+        markerWriter->stopThread (2000);
+    }
+}
+
+void OrchHarpAudioProcessor::writePedalMarkerFile()
+{
+    std::vector<std::pair<double, juce::String>> log;
+    {
+        const juce::ScopedLock sl (pedalMarkerLock);
+        log.swap (pedalMarkerLog);
+    }
+    if (log.empty())
+        return;
+
+    juce::String body;
+    for (const auto& entry : log)
+    {
+        // 4/4 assumed (matches OrchHarp's governor + OrchCapture's bar math);
+        // bar is 1-indexed, take start == bar 1.
+        const double bar = entry.first / 4.0 + 1.0;
+        body << juce::String (bar, 4) << ':' << "Harp pedals: " << entry.second << '\n';
+    }
+
+    const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                        .getChildFile ("orchharp-pedals-" + pedalMarkerTag + ".txt");
+    file.replaceWithText (body);
 }
 
 juce::StringArray OrchHarpAudioProcessor::pedalChoiceLabels()
@@ -1401,6 +1463,8 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
             currentGroup.clear();        // drop any half-built group (never sounded)
             lastContourInput = -1;       // and start the next phrase fresh
             contourStackDepth = 0;
+            if (markerWriter != nullptr) // flush the take's pedal log to the sidecar
+                markerWriter->wake.signal();
         }
         snapSoundingToRequested (requested);
     }
@@ -1409,10 +1473,26 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         lastContourInput = -1;
         contourStackDepth = 0;
         snapSoundingToRequested (requested);
+        {
+            const juce::ScopedLock sl (pedalMarkerLock);
+            pedalMarkerLog.clear();       // new take
+        }
+        lastLoggedRequested = { -9, -9, -9, -9, -9, -9, -9 };
     }
     else
     {
         runGovernor (requested, blockBeats);
+    }
+
+    // Log each requested-diagram change of the take (the intended pedal move,
+    // not the governor's intermediate steps) for the OrchCapture sidecar.
+    if (playing && requested != lastLoggedRequested)
+    {
+        lastLoggedRequested = requested;
+        const juce::String label (ohrp::harpPedalText (requested));
+        const juce::ScopedLock sl (pedalMarkerLock);
+        if (pedalMarkerLog.size() < 4096)
+            pedalMarkerLog.emplace_back (juce::jmax (0.0, blockStartPpq), label);
     }
 
     wasPlaying = playing;

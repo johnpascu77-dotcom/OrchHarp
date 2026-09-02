@@ -3,6 +3,8 @@
 #include <array>
 #include <atomic>
 #include <limits>
+#include <memory>
+#include <utility>
 #include <vector>
 #include <JuceHeader.h>
 
@@ -12,7 +14,7 @@ class OrchHarpAudioProcessor final : public juce::AudioProcessor
 {
 public:
     OrchHarpAudioProcessor();
-    ~OrchHarpAudioProcessor() override = default;
+    ~OrchHarpAudioProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -191,6 +193,19 @@ private:
     double sampleRate = 44100.0;
     double integratedPpq = 0.0;
     bool wasPlaying = false;
+
+    // ---- Pedal-marker sidecar --------------------------------------------
+    // On transport stop OrchHarp writes every requested-diagram change of the
+    // take to a well-known temp file as "bar:label" lines; OrchCapture folds
+    // them into its section markers so the pedal changes land in the Dorico
+    // score. Written off the audio thread by a dedicated worker.
+    struct MarkerWriter;
+    std::unique_ptr<MarkerWriter> markerWriter;
+    juce::String pedalMarkerTag;
+    ohrp::Diagram lastLoggedRequested { -9, -9, -9, -9, -9, -9, -9 };
+    std::vector<std::pair<double, juce::String>> pedalMarkerLog;
+    juce::CriticalSection pedalMarkerLock;
+    void writePedalMarkerFile();   // worker thread only
 
     // ---- Glissando engine ----
     static constexpr int kGlissBaseOctave = 2; // absolute string index 0 -> ~MIDI 24

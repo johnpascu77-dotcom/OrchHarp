@@ -500,6 +500,28 @@ namespace ohrp
         return a == b;
     }
 
+    std::string harpPedalText (const Diagram& diagram)
+    {
+        static const char* kName[7] = { "C", "D", "E", "F", "G", "A", "B" };
+        static const int   kBoard[7] = { 1, 0, 6, 2, 3, 4, 5 }; // D C B | E F G A
+
+        std::string out;
+        for (int slot = 0; slot < 7; ++slot)
+        {
+            if (slot == 3)
+                out += " |";
+            if (slot > 0)
+                out += ' ';
+
+            const int letter = kBoard[slot];
+            const int off = std::clamp (diagram[static_cast<size_t> (letter)], -1, 1);
+            out += kName[letter];
+            if (off < 0) out += 'b';
+            else if (off > 0) out += '#';
+        }
+        return out;
+    }
+
     Diagram playablePedalStep (const Diagram& current,
                                const Diagram& target,
                                const MoveInfo& moveInfo,

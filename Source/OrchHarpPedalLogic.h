@@ -176,6 +176,12 @@ namespace ohrp
     // True when two diagrams are pedal-for-pedal identical.
     bool diagramsEqual (const Diagram& a, const Diagram& b) noexcept;
 
+    // Board-order pedal spelling for a score marker: "Db C B | E F# G Ab"
+    // (left foot D C B, then right foot E F G A) - the same notation Dorico's
+    // harp-pedaling popover uses, so it can be copied straight across. Fed to
+    // OrchCapture as a section marker via the sidecar file.
+    std::string harpPedalText (const Diagram& diagram);
+
     // Foot membership.
     bool isLeftFootLetter (int letter) noexcept;   // B, C, D
     bool isRightFootLetter (int letter) noexcept;  // E, F, G, A
