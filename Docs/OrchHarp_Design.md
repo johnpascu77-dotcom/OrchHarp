@@ -384,11 +384,17 @@ Off by default → zero behaviour change. On → consecutive note-ons are groupe
 (`onsetWindowMs`, or until a note-off / block end closes the group — no
 cross-block carry) and each group runs `ohrp::selectVoices`:
 
-1. **Split** — `Hand` (Both/Left/Right) × `splitMode`: *Block* (left = lower
-   floor(k/2)), *Interlock* (left = even indices), *Channel* (`splitChanLeft/Right`,
-   filtered before selection — source is pre-separated), *Off*. Pure &
+1. **Split** — `Hand` (Both/Left/Right) × `splitMode`: *Block* (Left keeps notes
+   below `splitNote`, Right keeps the rest — **by register, not by count**, so
+   each instance's own hand-range fold can't desync the two halves), *Interlock*
+   (left = even indices), *Channel* (`splitChanLeft/Right`, filtered before
+   selection — source is pre-separated), *Off*. A **lone note** (k==1) under
+   Block or Interlock is routed by `splitNote` too, so a monophonic line isn't
+   silently dropped by one instance instead of a real split. Pure &
    deterministic, so **two instances (one Left, one Right, same MIDI + pedal
-   CCs) split every chord identically with no IPC**.
+   CCs + same `splitNote`) split every chord identically with no IPC**. For two
+   *variants* of a monophonic line, use `splitMode = Off` on both and differ by
+   contour step / diagram — split divides a texture, it doesn't duplicate a line.
 2. **Range** — `handLoNote..handHiNote`, `outOfRange` Drop / Fold-octave / Clamp.
 3. **Poly cap** — `maxVoices` per group; drop the note nearest the median,
    never a protected end.

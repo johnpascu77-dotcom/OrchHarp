@@ -96,6 +96,7 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     splitModeParam       = parameters.getRawParameterValue ("splitMode");
     splitChanLeftParam   = parameters.getRawParameterValue ("splitChanLeft");
     splitChanRightParam  = parameters.getRawParameterValue ("splitChanRight");
+    splitNoteParam       = parameters.getRawParameterValue ("splitNote");
     maxVoicesParam       = parameters.getRawParameterValue ("maxVoices");
     onsetWindowMsParam   = parameters.getRawParameterValue ("onsetWindowMs");
     handLoNoteParam      = parameters.getRawParameterValue ("handLoNote");
@@ -241,6 +242,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::ParameterID { "splitChanLeft", 1 }, "Split Channel Left", 1, 16, 1));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "splitChanRight", 1 }, "Split Channel Right", 1, 16, 2));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "splitNote", 1 }, "Split Note (L below / R at-or-above)", 0, 127, 60));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "maxVoices", 1 }, "Max Voices", 1, 12, 4));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
@@ -1250,6 +1253,7 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
     cfg.maxVoices = maxVoicesParam != nullptr ? juce::jlimit (1, 12, juce::roundToInt (maxVoicesParam->load())) : 4;
     cfg.maxSpanSemis = overSpan == 0 ? maxSpan : 999; // Drop Widest only; Fold/Roll handled here
     cfg.protect = protectParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (protectParam->load())) : 3;
+    cfg.splitNote = splitNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (splitNoteParam->load())) : 60;
 
     const auto keptIdx = ohrp::selectVoices (sortedNotes, cfg);
     lastVoicedKept.store (static_cast<int> (keptIdx.size()));

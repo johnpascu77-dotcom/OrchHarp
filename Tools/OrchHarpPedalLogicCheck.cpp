@@ -283,21 +283,34 @@ int main()
     {
         auto eq = [] (const std::vector<int>& got, const std::vector<int>& want) { return got == want; };
 
-        std::vector<int> chord4 { 48, 52, 55, 60 }; // C E G C
+        std::vector<int> chord4 { 48, 55, 62, 69 }; // C3 G3 D4 A4, straddles the C4 split
 
         VoiceConfig block { };
-        block.splitMode = 1; block.maxVoices = 4; block.maxSpanSemis = 36;
+        block.splitMode = 1; block.maxVoices = 4; block.maxSpanSemis = 36; block.splitNote = 60;
 
         block.hand = 1; // Left
-        check (eq (selectVoices (chord4, block), { 0, 1 }), "Block split, 4-note chord, Left -> lower 2");
+        check (eq (selectVoices (chord4, block), { 0, 1 }), "Block split by register: Left keeps notes below the split");
         block.hand = 2; // Right
-        check (eq (selectVoices (chord4, block), { 2, 3 }), "Block split, 4-note chord, Right -> upper 2");
+        check (eq (selectVoices (chord4, block), { 2, 3 }), "Block split by register: Right keeps notes at/above the split");
 
-        std::vector<int> chord5 { 48, 52, 55, 59, 64 };
+        // Register split, not count split: a lopsided chord divides where the
+        // notes actually sit, and the two halves cover the group with no gap.
+        std::vector<int> chord5 { 48, 52, 59, 64, 67 };
         block.hand = 1;
-        check (eq (selectVoices (chord5, block), { 0, 1 }), "Block split, 5-note chord, Left -> lower 2 (floor)");
+        check (eq (selectVoices (chord5, block), { 0, 1, 2 }), "Block split: Left keeps the three below C4");
         block.hand = 2;
-        check (eq (selectVoices (chord5, block), { 2, 3, 4 }), "Block split, 5-note chord, Right -> upper 3");
+        check (eq (selectVoices (chord5, block), { 3, 4 }), "Block split: Right keeps the two at/above C4");
+
+        // A lone note is routed by register, not dropped by one instance.
+        block.hand = 1;
+        check (eq (selectVoices ({ 55 }, block), { 0 }), "lone note below split -> Left keeps it");
+        check (selectVoices ({ 72 }, block).empty(),       "lone note above split -> Left drops it");
+        block.hand = 2;
+        check (selectVoices ({ 55 }, block).empty(),       "lone note below split -> Right drops it");
+        check (eq (selectVoices ({ 72 }, block), { 0 }),   "lone note above split -> Right keeps it");
+        block.hand = 1; block.splitNote = 84;
+        check (eq (selectVoices ({ 72 }, block), { 0 }),   "raising the split sends a high lone note to Left");
+        block.splitNote = 60;
 
         VoiceConfig inter { };
         inter.splitMode = 2; inter.maxVoices = 4; inter.maxSpanSemis = 36;

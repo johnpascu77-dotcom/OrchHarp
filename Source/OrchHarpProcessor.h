@@ -122,6 +122,7 @@ private:
     std::atomic<float>* splitModeParam = nullptr;
     std::atomic<float>* splitChanLeftParam = nullptr;
     std::atomic<float>* splitChanRightParam = nullptr;
+    std::atomic<float>* splitNoteParam = nullptr;
     std::atomic<float>* maxVoicesParam = nullptr;
     std::atomic<float>* onsetWindowMsParam = nullptr;
     std::atomic<float>* handLoNoteParam = nullptr;

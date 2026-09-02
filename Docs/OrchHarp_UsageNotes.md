@@ -49,9 +49,12 @@ Notes are grouped by onset (**onset window ms** ≈ one hand placement) and each
 group is filtered:
 
 - **Hand** — Both / Left / Right. **Split** — how a chord is divided between the
-  hands: *Block* (this hand takes its half by pitch), *Interlock* (alternating
-  notes), *Channel* (the source already put the hands on separate MIDI
-  channels — set **Split channels L / R**), *Off*.
+  hands: *Block* (Left takes notes below the **Split note**, Right takes the
+  rest), *Interlock* (alternating notes), *Channel* (the source already put the
+  hands on separate MIDI channels — set **Split channels L / R**), *Off*.
+- **Split note** — the register line for *Block* (default C4). It also decides
+  which hand a **lone** note goes to under *Block* or *Interlock*, so a
+  monophonic line lands on one instance instead of being dropped by both.
 - **Max voices** — notes kept per hand per placement (4 = a hand).
 - **Hand low / high note** + **out-of-range** — Drop / Fold an octave / Clamp.
 - **Max span** — the widest reach (16 semitones = a 10th). **Over-span**:
@@ -76,9 +79,10 @@ every chord identically with no link between them.
   ch 1 and right-hand on ch 2 (a Dorico two-stave export, or a Bitwig note-FX
   splitting by pitch). Then leave **Output channel = 0** — ch 1 / 2 pass
   straight through to Dorico as two voices.
-- **Split = Block** derives the hands from a single stream (Left takes the lower
-  notes of each chord, Right the upper). Set **Output channel** 1 and 2 to tag
-  them for Dorico's two voices (up / down stems).
+- **Split = Block** derives the hands from a single stream by register: Left
+  keeps notes below the **Split note**, Right keeps the rest. Both instances
+  must use the **same Split note**. Set **Output channel** 1 and 2 to tag them
+  for Dorico's two voices (up / down stems).
 
 Then send both into OrchCapture → the merge is one harp part, two voices.
 
@@ -87,9 +91,15 @@ Then send both into OrchCapture → the merge is one harp part, two voices.
 The **contour window** (Harp tab) bounds the generated line; the **hand range**
 (Voicing tab) then clamps each hand's slice. For a two-instance contour texture,
 set *both* instances' contour window to the whole intended register and let the
-hand ranges + split carve it. Note a **Monophonic** contour is one note per
-onset — Block split sends it all to the right hand; use **Stack** for a genuine
-two-handed contour.
+hand ranges + split carve it.
+
+A **Monophonic** contour is one note per onset. Block / Interlock split then
+route each note to a *single* hand by the **Split note**: a line that stays on
+one side of it plays on only one instance. To get **two variants of one
+melodic line**, don't split — set **Split = Off** (or **Hand = Both**) on both
+instances and differ them by **Contour step**, diagram, or contour window.
+Split is for dividing a genuinely two-handed texture (use **Stack** chords, or
+a polyphonic input).
 
 Voicing off = the plugin behaves exactly as before.
 

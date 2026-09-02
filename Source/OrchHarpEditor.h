@@ -131,7 +131,7 @@ private:
     juce::ToggleButton voicingEnableButton;
     juce::TextButton leftHandPresetButton { "Left hand" }, rightHandPresetButton { "Right hand" };
     juce::ComboBox handBox, splitModeBox, outOfRangeBox, overSpanBox, rollRateBox, protectBox;
-    juce::Slider splitChanLeftSlider, splitChanRightSlider, maxVoicesSlider, onsetWindowSlider,
+    juce::Slider splitChanLeftSlider, splitChanRightSlider, splitNoteSlider, maxVoicesSlider, onsetWindowSlider,
                  handLoNoteSlider, handHiNoteSlider, maxSpanSlider, outChannelSlider;
 
     juce::Label statusLabel;
@@ -156,7 +156,7 @@ private:
     std::unique_ptr<ButtonAttachment> voicingEnableAttachment;
     std::unique_ptr<ComboBoxAttachment> handAttachment, splitModeAttachment, outOfRangeAttachment,
                                         overSpanAttachment, rollRateAttachment, protectAttachment;
-    std::unique_ptr<SliderAttachment> splitChanLeftAttachment, splitChanRightAttachment, maxVoicesAttachment,
+    std::unique_ptr<SliderAttachment> splitChanLeftAttachment, splitChanRightAttachment, splitNoteAttachment, maxVoicesAttachment,
                                       onsetWindowAttachment, handLoNoteAttachment, handHiNoteAttachment,
                                       maxSpanAttachment, outChannelAttachment;
 

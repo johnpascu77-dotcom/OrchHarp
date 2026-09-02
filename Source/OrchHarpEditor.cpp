@@ -654,13 +654,16 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     addAndMakeVisible (splitModeBox);
     splitModeAttachment = std::make_unique<ComboBoxAttachment> (params, "splitMode", splitModeBox);
 
-    voicingSplitLabel.setText ("Split channels L / R", juce::dontSendNotification);
+    voicingSplitLabel.setText ("Split note / channels L R", juce::dontSendNotification);
     styleLabel (voicingSplitLabel, 12.0f);
     addAndMakeVisible (voicingSplitLabel);
+    initNoteIncDec (splitNoteSlider);
     initIncDec (splitChanLeftSlider, 1, 16);
     initIncDec (splitChanRightSlider, 1, 16);
+    addAndMakeVisible (splitNoteSlider);
     addAndMakeVisible (splitChanLeftSlider);
     addAndMakeVisible (splitChanRightSlider);
+    splitNoteAttachment = std::make_unique<SliderAttachment> (params, "splitNote", splitNoteSlider);
     splitChanLeftAttachment = std::make_unique<SliderAttachment> (params, "splitChanLeft", splitChanLeftSlider);
     splitChanRightAttachment = std::make_unique<SliderAttachment> (params, "splitChanRight", splitChanRightSlider);
 
@@ -751,7 +754,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     reparent (voicingPanel, {
         &voicingEnableButton, &leftHandPresetButton, &rightHandPresetButton,
         &voicingHandLabel, &handBox, &splitModeBox,
-        &voicingSplitLabel, &splitChanLeftSlider, &splitChanRightSlider,
+        &voicingSplitLabel, &splitNoteSlider, &splitChanLeftSlider, &splitChanRightSlider,
         &voicingCapLabel, &maxVoicesSlider, &onsetWindowSlider,
         &voicingRangeLabel, &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox,
         &voicingSpanLabel, &maxSpanSlider, &overSpanBox, &rollRateBox,
@@ -1046,6 +1049,8 @@ void OrchHarpAudioProcessorEditor::layoutVoicingTab()
     {
         auto row = area.removeFromTop (26);
         voicingSplitLabel.setBounds (row.removeFromLeft (lblW));
+        splitNoteSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (16);
         splitChanLeftSlider.setBounds (row.removeFromLeft (fld));
         row.removeFromLeft (8);
         splitChanRightSlider.setBounds (row.removeFromLeft (fld));
@@ -1121,7 +1126,9 @@ void OrchHarpAudioProcessorEditor::timerCallback()
 
     // Voicing tab: grey everything unless enabled; split channels unless Channel.
     const bool voicing = audioProcessor.getParameters().getRawParameterValue ("voicingEnable")->load() >= 0.5f;
-    const bool chanSplit = audioProcessor.getParameters().getRawParameterValue ("splitMode")->load() >= 2.5f;
+    const float splitModeVal = audioProcessor.getParameters().getRawParameterValue ("splitMode")->load();
+    const bool chanSplit = splitModeVal >= 2.5f;                       // Channel
+    const bool pitchSplit = splitModeVal >= 0.5f && splitModeVal < 2.5f; // Block / Interlock
     const bool rolling = audioProcessor.getParameters().getRawParameterValue ("overSpan")->load() >= 1.5f;
     for (juce::Component* c : std::initializer_list<juce::Component*> {
              &leftHandPresetButton, &rightHandPresetButton,
@@ -1130,9 +1137,10 @@ void OrchHarpAudioProcessorEditor::timerCallback()
              &overSpanBox, &protectBox, &outChannelSlider,
              &voicingHandLabel, &voicingCapLabel, &voicingRangeLabel, &voicingSpanLabel, &voicingProtectLabel })
         c->setEnabled (voicing);
+    splitNoteSlider.setEnabled (voicing && pitchSplit);
     splitChanLeftSlider.setEnabled (voicing && chanSplit);
     splitChanRightSlider.setEnabled (voicing && chanSplit);
-    voicingSplitLabel.setEnabled (voicing && chanSplit);
+    voicingSplitLabel.setEnabled (voicing && (pitchSplit || chanSplit));
     rollRateBox.setEnabled (voicing && rolling);
 
     refreshBankCells();

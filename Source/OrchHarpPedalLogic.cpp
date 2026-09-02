@@ -312,26 +312,37 @@ namespace ohrp
         // --- 1. hand slice ------------------------------------------------
         std::vector<int> kept;
         const bool both = config.hand == 0 || config.splitMode == 0;
+        const bool wantLeft = config.hand == 1;
 
         if (both)
         {
             for (int i = 0; i < k; ++i)
                 kept.push_back (i);
         }
+        else if (k == 1)
+        {
+            // A lone note can't be split by count or parity. Route it by
+            // register so a monophonic line isn't dropped wholesale by one
+            // instance of a two-hand rig.
+            const bool noteIsLeft = sortedNotes[0] < config.splitNote;
+            if (noteIsLeft == wantLeft)
+                kept.push_back (0);
+        }
         else if (config.splitMode == 2) // Interlock
         {
-            const int parity = config.hand == 1 ? 0 : 1; // left = even from the bottom
+            const int parity = wantLeft ? 0 : 1; // left = even from the bottom
             for (int i = 0; i < k; ++i)
                 if (i % 2 == parity)
                     kept.push_back (i);
         }
-        else // Block
-        {
-            const int leftCount = k / 2;
-            if (config.hand == 1)
-                for (int i = 0; i < leftCount; ++i) kept.push_back (i);
-            else
-                for (int i = leftCount; i < k; ++i) kept.push_back (i);
+        else // Block: partition by register, not by count, so per-instance
+        {    // hand-range folding can't desync the two halves.
+            for (int i = 0; i < k; ++i)
+            {
+                const bool noteIsLeft = sortedNotes[static_cast<size_t> (i)] < config.splitNote;
+                if (noteIsLeft == wantLeft)
+                    kept.push_back (i);
+            }
         }
 
         if (kept.empty())

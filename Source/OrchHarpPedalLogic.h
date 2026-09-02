@@ -131,6 +131,9 @@ namespace ohrp
         int maxVoices = 4;     // per group, for this hand
         int maxSpanSemis = 16; // a 10th
         int protect = 3;       // 0 None, 1 KeepLowest, 2 KeepHighest, 3 KeepBothEnds
+        int splitNote = 60;    // Block: notes below go Left, at/above go Right. Also
+                               // routes a lone note (any split mode) so a monophonic
+                               // line isn't silently dropped by one instance.
     };
 
     // `sortedNotes` ascending (one onset group, already channel-filtered).
