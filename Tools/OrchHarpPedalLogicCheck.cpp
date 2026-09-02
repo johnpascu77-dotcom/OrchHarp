@@ -260,6 +260,23 @@ int main()
 
         // Seed (no previous input).
         checkInt (contourNextIndex (-1, 7, 60, ContourStep::Tight), 7, "contour seed: returns the seed index");
+
+        // Clamped walk (the processor clamps the walk POSITION each step, not
+        // just the output): a long descent parks at the floor and recovers on
+        // the next ascent instead of running the internal index away.
+        {
+            const int lo = 0, hi = 28;
+            int pos = 20, prevIn = 127;
+            for (int i = 0; i < 40; ++i) // a long steady descent
+            {
+                const int inNote = prevIn - 3;
+                pos = std::max (lo, std::min (hi, contourNextIndex (prevIn, pos, inNote, ContourStep::Tight)));
+                prevIn = inNote;
+            }
+            checkInt (pos, lo, "clamped contour walk parks at the floor on a long descent");
+            pos = std::max (lo, std::min (hi, contourNextIndex (prevIn, pos, prevIn + 30, ContourStep::Tight)));
+            check (pos > lo, "clamped contour walk climbs off the floor on the next ascent");
+        }
     }
 
     // --- Voicing --------------------------------------------------

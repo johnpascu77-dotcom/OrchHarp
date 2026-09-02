@@ -31,8 +31,12 @@ comes out as that scale with the same gesture — an instant, controllable
   *Stack* (the rest take the next lower diagram degrees).
 - **low / high note** — the register the contour is kept inside.
 
-Re-pedal mid-phrase and the line recolours. Black-key modes don't apply in
-Contour. Absolute mode is the normal transform.
+The contour is a **cumulative walk** — each note steps from where the last one
+landed — kept inside **low / high note**. It re-seeds near the input's real
+pitch after a rest (≥ 2 beats) or on transport stop, so each phrase starts in
+the right register instead of drifting. Re-pedal mid-phrase and the line
+recolours. Black-key modes don't apply in Contour. Absolute mode is the normal
+transform.
 
 ## Voicing  (Voicing tab)  —  off by default
 

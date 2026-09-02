@@ -966,11 +966,21 @@ OrchHarpAudioProcessor::resolveNoteOn (const juce::MidiMessage& message, int sam
         const auto step = static_cast<ohrp::ContourStep> (
             contourStepParam != nullptr ? juce::jlimit (0, 3, juce::roundToInt (contourStepParam->load())) : 0);
         const bool stack = contourChordsParam != nullptr && contourChordsParam->load() >= 0.5f;
-        const int lo = contourWindowLo();
-        const int hi = contourWindowHi();
+        const int wLo = juce::jmin (contourWindowLo(), contourWindowHi());
+        const int wHi = juce::jmax (contourWindowLo(), contourWindowHi());
 
         constexpr double kClusterBeats = 0.0625; // 1/64 note - a tight simultaneity
-        const bool inCluster = lastContourInput >= 0 && (eventPpq - contourClusterPpq) < kClusterBeats;
+        constexpr double kPhraseGapBeats = 2.0;  // a rest this long re-seeds the walk
+
+        const double sincePrev = eventPpq - contourClusterPpq;
+
+        // A rest, or a transport jump, starts a fresh phrase: the next note
+        // re-seeds near its own pitch instead of continuing the drift.
+        if (lastContourInput >= 0 && (sincePrev < 0.0 || sincePrev >= kPhraseGapBeats))
+            lastContourInput = -1;
+
+        const bool inCluster = lastContourInput >= 0
+                            && sincePrev >= 0.0 && sincePrev < kClusterBeats;
 
         int idx;
         if (inCluster)
@@ -982,21 +992,25 @@ OrchHarpAudioProcessor::resolveNoteOn (const juce::MidiMessage& message, int sam
                 return r;
             }
             ++contourStackDepth;
-            idx = contourClusterTopIdx - contourStackDepth;
+            idx = juce::jlimit (wLo, wHi, contourClusterTopIdx - contourStackDepth);
         }
         else
         {
             const int seed = lastContourInput < 0
                 ? ohrp::noteToNearestStringIndex (inputNote, soundingDiagram, kGlissBaseOctave)
                 : contourClusterTopIdx;
-            idx = ohrp::contourNextIndex (lastContourInput, seed, inputNote, step);
+            // Clamp the *walk position*, not just the output - otherwise a long
+            // descending line runs the internal index past the floor and every
+            // note pins to the bottom string until the input climbs back by the
+            // whole accumulated distance.
+            idx = juce::jlimit (wLo, wHi,
+                                ohrp::contourNextIndex (lastContourInput, seed, inputNote, step));
             contourClusterTopIdx = idx;
             contourStackDepth = 0;
             contourClusterPpq = eventPpq;
             lastContourInput = inputNote;
         }
 
-        idx = juce::jlimit (juce::jmin (lo, hi), juce::jmax (lo, hi), idx);
         r.outputNote = ohrp::stringIndexToNote (idx, soundingDiagram, kGlissBaseOctave);
         r.letter = ((idx % 7) + 7) % 7;
         r.action = 6;
@@ -1368,11 +1382,17 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     if (! playing)
     {
         if (wasPlaying)
+        {
             flushGlissNotes (output, 0); // transport stop: damp everything
+            lastContourInput = -1;       // and start the next phrase fresh
+            contourStackDepth = 0;
+        }
         snapSoundingToRequested (requested);
     }
     else if (! wasPlaying)
     {
+        lastContourInput = -1;
+        contourStackDepth = 0;
         snapSoundingToRequested (requested);
     }
     else
