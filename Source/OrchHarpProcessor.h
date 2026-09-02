@@ -135,6 +135,7 @@ private:
     std::atomic<float>* rollRateParam = nullptr;
     std::atomic<float>* protectParam = nullptr;
     std::atomic<float>* outChannelParam = nullptr;
+    std::atomic<float>* dampSuccessiveParam = nullptr;
 
     // Typed handles for guarded write-back from CC / bank recall / nudge.
     std::array<juce::AudioParameterChoice*, 7> pedalChoice { };

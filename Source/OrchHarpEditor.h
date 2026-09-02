@@ -128,7 +128,7 @@ private:
     // ---- Voicing tab ----
     juce::Label voicingHandLabel, voicingSplitLabel, voicingCapLabel, voicingRangeLabel,
                 voicingSpanLabel, voicingProtectLabel;
-    juce::ToggleButton voicingEnableButton;
+    juce::ToggleButton voicingEnableButton, dampSuccessiveButton;
     juce::TextButton leftHandPresetButton { "Left hand" }, rightHandPresetButton { "Right hand" };
     juce::ComboBox handBox, splitModeBox, outOfRangeBox, overSpanBox, rollRateBox, protectBox;
     juce::Slider splitChanLeftSlider, splitChanRightSlider, splitNoteSlider, maxVoicesSlider, onsetWindowSlider,
@@ -153,7 +153,7 @@ private:
     std::unique_ptr<ComboBoxAttachment> pitchModeAttachment, contourStepAttachment, contourChordsAttachment;
     std::unique_ptr<SliderAttachment> contourLoNoteAttachment, contourHiNoteAttachment;
 
-    std::unique_ptr<ButtonAttachment> voicingEnableAttachment;
+    std::unique_ptr<ButtonAttachment> voicingEnableAttachment, dampSuccessiveAttachment;
     std::unique_ptr<ComboBoxAttachment> handAttachment, splitModeAttachment, outOfRangeAttachment,
                                         overSpanAttachment, rollRateAttachment, protectAttachment;
     std::unique_ptr<SliderAttachment> splitChanLeftAttachment, splitChanRightAttachment, splitNoteAttachment, maxVoicesAttachment,

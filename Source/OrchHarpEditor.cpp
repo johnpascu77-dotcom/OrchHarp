@@ -642,6 +642,11 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     leftHandPresetButton.onClick  = [this] { audioProcessor.applyHandPreset (true); };
     rightHandPresetButton.onClick = [this] { audioProcessor.applyHandPreset (false); };
 
+    dampSuccessiveButton.setButtonText ("Damp on next attack");
+    dampSuccessiveButton.setColour (juce::ToggleButton::textColourId, juce::Colours::white);
+    addAndMakeVisible (dampSuccessiveButton);
+    dampSuccessiveAttachment = std::make_unique<ButtonAttachment> (params, "dampSuccessive", dampSuccessiveButton);
+
     voicingHandLabel.setText ("Hand / split", juce::dontSendNotification);
     styleLabel (voicingHandLabel, 12.0f);
     addAndMakeVisible (voicingHandLabel);
@@ -752,7 +757,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     for (auto& c : bankCells)         harpPanel.addAndMakeVisible (c);
 
     reparent (voicingPanel, {
-        &voicingEnableButton, &leftHandPresetButton, &rightHandPresetButton,
+        &voicingEnableButton, &leftHandPresetButton, &rightHandPresetButton, &dampSuccessiveButton,
         &voicingHandLabel, &handBox, &splitModeBox,
         &voicingSplitLabel, &splitNoteSlider, &splitChanLeftSlider, &splitChanRightSlider,
         &voicingCapLabel, &maxVoicesSlider, &onsetWindowSlider,
@@ -1030,11 +1035,13 @@ void OrchHarpAudioProcessorEditor::layoutVoicingTab()
 
     {
         auto row = area.removeFromTop (26);
-        voicingEnableButton.setBounds (row.removeFromLeft (110));
-        row.removeFromLeft (20);
-        leftHandPresetButton.setBounds (row.removeFromLeft (100));
-        row.removeFromLeft (8);
-        rightHandPresetButton.setBounds (row.removeFromLeft (100));
+        voicingEnableButton.setBounds (row.removeFromLeft (100));
+        row.removeFromLeft (14);
+        leftHandPresetButton.setBounds (row.removeFromLeft (92));
+        row.removeFromLeft (6);
+        rightHandPresetButton.setBounds (row.removeFromLeft (92));
+        row.removeFromLeft (18);
+        dampSuccessiveButton.setBounds (row.removeFromLeft (180));
     }
     area.removeFromTop (8);
 
@@ -1131,7 +1138,7 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     const bool pitchSplit = splitModeVal >= 0.5f && splitModeVal < 2.5f; // Block / Interlock
     const bool rolling = audioProcessor.getParameters().getRawParameterValue ("overSpan")->load() >= 1.5f;
     for (juce::Component* c : std::initializer_list<juce::Component*> {
-             &leftHandPresetButton, &rightHandPresetButton,
+             &leftHandPresetButton, &rightHandPresetButton, &dampSuccessiveButton,
              &handBox, &splitModeBox, &maxVoicesSlider, &onsetWindowSlider,
              &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox, &maxSpanSlider,
              &overSpanBox, &protectBox,

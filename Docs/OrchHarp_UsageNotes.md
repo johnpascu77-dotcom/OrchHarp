@@ -67,6 +67,12 @@ group is filtered:
   instance's output — **voiced notes and the glissando engines** — to one
   channel. In a two-instance rig this is what puts each hand (and its gliss) on
   its own Dorico voice. Stays editable with Voicing off, for a gliss-only rig.
+- **Damp on next attack** (on by default) — notes struck **together** (a chord)
+  keep their full length; a **new** attack cuts off whatever was still ringing
+  from the previous one. A legato or overlapping melodic line then notates as
+  clean successive notes instead of a stack of overlapping ties, and a repeated
+  pitch comes through instead of being eaten as a same-string collision. Turn
+  it off to keep every note ringing for its full input length.
 
 ### Two-instance left/right rig
 

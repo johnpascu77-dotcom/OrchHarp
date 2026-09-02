@@ -406,6 +406,13 @@ cross-block carry) and each group runs `ohrp::selectVoices`:
    in-block arpeggio, `rollRate` spacing).
 5. **Protect** — None / Keep Lowest / Keep Highest / Keep Both Ends. **Protect
    wins over span** — if the protected notes alone exceed it, they stay.
+6. **Damp on next attack** (`dampSuccessive`, default on) — as a group flushes
+   with ≥1 survivor, every `activeNotes` entry still ringing from an earlier
+   group gets a note-off at the new group's onset and its `outputNote` set to
+   −1 (so the real note-off is swallowed). Notes struck together keep their
+   length; a legato line becomes clean successive notes; a repeated pitch is no
+   longer eaten by the same-string collision check. Gliss engines are untouched
+   (they have their own release).
 
 `outChannel` (0 = source) tags all output to one channel → two instances land on
 Dorico voices 1 / 2 (up / down stems). Note-offs follow the tagged channel

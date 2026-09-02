@@ -130,6 +130,7 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     rollRateParam        = parameters.getRawParameterValue ("rollRate");
     protectParam         = parameters.getRawParameterValue ("protect");
     outChannelParam      = parameters.getRawParameterValue ("outChannel");
+    dampSuccessiveParam  = parameters.getRawParameterValue ("dampSuccessive");
 
     bankSlotInt = dynamic_cast<juce::AudioParameterInt*> (parameters.getParameter ("bankSlot"));
 
@@ -330,6 +331,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::StringArray { "None", "Keep Lowest", "Keep Highest", "Keep Both Ends" }, 3));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "outChannel", 1 }, "Output Channel (0 = source; tags gliss)", 0, 16, 0));
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "dampSuccessive", 1 }, "Damp On Next Attack", true));
 
     return { params.begin(), params.end() };
 }
@@ -1332,6 +1335,28 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
         const int want = ppqPerSample > 0.0 ? static_cast<int> (kRollBeats[static_cast<size_t> (rr)] / ppqPerSample) : 64;
         const int room = juce::jmax (1, numSamples - 1 - group.front().samplePos);
         staggerSamples = juce::jmin (want, room / juce::jmax (1, static_cast<int> (keptIdx.size()) - 1));
+    }
+
+    // Successive notes monophonic: a new onset-group damps every voiced note
+    // still ringing from an earlier group, at this group's onset - so a legato
+    // melodic line notates as clean successive notes instead of overlapping
+    // ties. A chord (one onset-group) keeps its full input length. Also lets a
+    // repeated pitch through (it would otherwise hit the same-string collision).
+    const bool dampSuccessive = dampSuccessiveParam == nullptr || dampSuccessiveParam->load() >= 0.5f;
+    if (dampSuccessive && ! keptIdx.empty())
+    {
+        int onset = numSamples;
+        for (size_t i = 0; i < group.size(); ++i)
+            if (keep[i]) onset = juce::jmin (onset, group[i].samplePos);
+        onset = juce::jlimit (0, juce::jmax (0, numSamples - 1), onset);
+
+        for (auto& t : activeNotes)
+            if (t.outputNote >= 0)
+            {
+                const int ch = t.outputChannel > 0 ? t.outputChannel : t.channel;
+                output.addEvent (juce::MidiMessage::noteOff (ch, t.outputNote), onset);
+                t.outputNote = -1; // real note-off is then swallowed by handleNoteOff
+            }
     }
 
     int rollStep = 0;
