@@ -380,9 +380,9 @@ rest) / Stack (next lower diagram degrees). Bypasses black-key handling.
 
 ### Voicing (`voicingEnable`, Voicing tab)
 
-Off by default → zero behaviour change. On → note-ons are grouped by onset
-(`onsetWindowMs`, a group held at the block edge carries one block so DAW chords
-group cleanly regardless of buffer size) and each group runs `ohrp::selectVoices`:
+Off by default → zero behaviour change. On → consecutive note-ons are grouped
+(`onsetWindowMs`, or until a note-off / block end closes the group — no
+cross-block carry) and each group runs `ohrp::selectVoices`:
 
 1. **Split** — `Hand` (Both/Left/Right) × `splitMode`: *Block* (left = lower
    floor(k/2)), *Interlock* (left = even indices), *Channel* (`splitChanLeft/Right`,
@@ -403,6 +403,18 @@ group cleanly regardless of buffer size) and each group runs `ohrp::selectVoices
 Dorico voices 1 / 2 (up / down stems). Note-offs follow the tagged channel
 (`TrackedNote.outputChannel`). Roll is in-block only — a fast strum, not a slow
 spread; use the trigger-gliss engine for that.
+
+**Grouping never carries across a buffer** (a group closes on a note-off or the
+block end). The original cross-block carry held *every* group whenever the onset
+window exceeded the buffer, deferring every note one block and leaking any note
+shorter than a buffer or released across a stop → stuck notes. A chord split by
+a buffer boundary becomes two mini-groups a few ms apart; DAW chords land on one
+tick and never split.
+
+The **Left hand / Right hand** preset buttons set hand + range + protect +
+`outOfRange = Fold Octave` + `splitMode = Block` (LH C1–C5 / Keep Lowest,
+RH G2–G7 / Keep Highest). Block works from any single-channel source; switch to
+Channel only for a genuinely hand-separated one.
 
 ## 13. Open items for the build thread
 

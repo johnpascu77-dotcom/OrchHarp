@@ -581,7 +581,6 @@ void OrchHarpAudioProcessor::resetNoteMap()
     glissActiveCountUi.store (0);
 
     currentGroup.clear();
-    carriedGroup.clear();
     currentGroupStartSample = 0;
     lastContourInput = -1;
     contourStackDepth = 0;
@@ -1352,7 +1351,6 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         // bow out, so nothing hangs.
         flushGlissNotes (midiMessages, 0);
         currentGroup.clear();
-        carriedGroup.clear();
         if (! activeNotes.empty())
             resetNoteMap();
         wasPlaying = playing;
@@ -1387,6 +1385,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         if (wasPlaying)
         {
             flushGlissNotes (output, 0); // transport stop: damp everything
+            currentGroup.clear();        // drop any half-built group (never sounded)
             lastContourInput = -1;       // and start the next phrase fresh
             contourStackDepth = 0;
         }
@@ -1404,21 +1403,6 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     }
 
     wasPlaying = playing;
-
-    // A group held from the previous block emits first, at sample 0.
-    if (! carriedGroup.empty())
-    {
-        if (voicing)
-        {
-            for (auto& n : carriedGroup) n.samplePos = 0;
-            flushVoiceGroup (carriedGroup, output, ppqPerSample, numSamples);
-        }
-        else
-        {
-            for (auto& n : carriedGroup) { n.samplePos = 0; emitResolved (n, output); }
-        }
-        carriedGroup.clear();
-    }
 
     for (const auto metadata : midiMessages)
     {
@@ -1466,6 +1450,13 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (message.isNoteOff())
         {
+            // A note-off means the chord that was building is being released -
+            // close the group so its note-ons are tracked before we pair.
+            if (voicing && ! currentGroup.empty())
+            {
+                flushVoiceGroup (currentGroup, output, ppqPerSample, numSamples);
+                currentGroup.clear();
+            }
             handleNoteOff (message, samplePosition, output);
             continue;
         }
@@ -1473,7 +1464,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         if (message.isAllNotesOff() || message.isAllSoundOff())
         {
             flushGlissNotes (output, samplePosition);
-            resetNoteMap();
+            resetNoteMap(); // drops any buffered group - the panic kills everything
             output.addEvent (message, samplePosition);
             continue;
         }
@@ -1481,19 +1472,12 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         output.addEvent (message, samplePosition);
     }
 
-    // Close the open onset group: emit it now, or carry it to the next block if
-    // it began within the onset window of the block end (so a DAW-sequenced
-    // chord groups correctly regardless of buffer size - max one block hold).
+    // Close the open onset group at the block end. A chord split across a buffer
+    // boundary becomes two mini-groups (a few ms apart) - accepted; DAW chords
+    // land on one tick and never split.
     if (voicing && ! currentGroup.empty())
     {
-        if (currentGroupStartSample > numSamples - onsetWindowSamples)
-        {
-            carriedGroup = std::move (currentGroup);
-        }
-        else
-        {
-            flushVoiceGroup (currentGroup, output, ppqPerSample, numSamples);
-        }
+        flushVoiceGroup (currentGroup, output, ppqPerSample, numSamples);
         currentGroup.clear();
     }
 

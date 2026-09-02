@@ -167,7 +167,6 @@ private:
         int samplePos = 0;
     };
     std::vector<ResolvedNote> currentGroup;   // open onset group (voicing on)
-    std::vector<ResolvedNote> carriedGroup;   // held from the previous block
     int currentGroupStartSample = 0;
     std::atomic<int> lastVoicedKept { 0 };
     std::atomic<int> lastVoicedSeen { 0 };
