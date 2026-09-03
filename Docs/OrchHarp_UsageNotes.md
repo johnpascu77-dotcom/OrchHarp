@@ -309,15 +309,17 @@ span. No base-octave guessing — the two notes say exactly where it runs.
 
 ## Bisbigliando
 
-The harp "whisper" — a fast measured tremolo on one pitch. Hold a note in the
-bisb zone and it rustles until you release it; a **Bisbigliando** marker goes to
-the score. The tremolo runs with the transport stopped too.
+The harp "whisper" — a fast measured tremolo. It's a **keyswitch**: arm it, and
+every note you play normally rustles instead of sounding once; disarm and you're
+back to normal. No range to carve. A **Bisbigliando** marker goes to the score;
+the tremolo runs with the transport stopped too.
 
-- **Bisb zone lo / hi** — the note range that triggers a bisbigliando. **0 / 0 =
-  off.** The **note you play IS the pitch that rustles** (snapped to a string).
-  It's octave-folded into the harp's range, so the zone can sit low and out of
-  the way and still sound in register — but if you want to *choose* the rustle
-  pitch by which note you play, put the zone somewhere musical (e.g. C3–C6).
+- **Keyswitch note** (0 = off) — a note that arms bisb **while it's held**. Put
+  it below the playing range (a keyswitch). Hold it, play your passage, release.
+- **Arm CC#** (0 = off) — a CC that arms bisb while its value is **≥ 64**. Use a
+  pedal, a knob, or host automation (so a whole section can be bisbigliando).
+  Either control arms it; releasing the keyswitch leaves any ringing tremolos to
+  finish on their own.
 - **Bisb rate** — the tremolo subdivision (1/16 … 1/64, straight or triplet),
   tempo-synced.
 - **Enharmonic rock** — off: repeats the one note (the standard tremolo Dorico

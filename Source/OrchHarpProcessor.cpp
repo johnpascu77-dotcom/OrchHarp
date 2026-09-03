@@ -106,8 +106,8 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     glissTrigHiParam       = parameters.getRawParameterValue ("glissTrigHi");
     glissRunLoNoteParam    = parameters.getRawParameterValue ("glissRunLoNote");
     glissRunHiNoteParam    = parameters.getRawParameterValue ("glissRunHiNote");
-    bisbLoNoteParam        = parameters.getRawParameterValue ("bisbLoNote");
-    bisbHiNoteParam        = parameters.getRawParameterValue ("bisbHiNote");
+    bisbKsNoteParam        = parameters.getRawParameterValue ("bisbKsNote");
+    bisbCcParam            = parameters.getRawParameterValue ("bisbCc");
     bisbRateParam          = parameters.getRawParameterValue ("bisbRate");
     bisbEnharmonicParam    = parameters.getRawParameterValue ("bisbEnharmonic");
     glissRunDirectionParam = parameters.getRawParameterValue ("glissRunDirection");
@@ -292,10 +292,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::StringArray { "1/16", "1/8", "1/4", "1/2", "1 bar" }, 2));
 
     // ---- Bisbigliando (Phase 2c) --------------------------------------
+    // A keyswitch: while armed (KS note held, or CC >= 64), every note you play
+    // rustles as a tremolo instead of sounding once - no zone to carve.
     params.push_back (std::make_unique<juce::AudioParameterInt>(
-        juce::ParameterID { "bisbLoNote", 1 }, "Bisb Low Note (0/0 = off)", 0, 127, 0));
+        juce::ParameterID { "bisbKsNote", 1 }, "Bisb Keyswitch Note (0 = off)", 0, 127, 0));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
-        juce::ParameterID { "bisbHiNote", 1 }, "Bisb High Note", 0, 127, 0));
+        juce::ParameterID { "bisbCc", 1 }, "Bisb Arm CC# (0 = off, >=64 on)", 0, 127, 0));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "bisbRate", 1 }, "Bisb Rate",
         juce::StringArray { "1/16", "1/16T", "1/32", "1/32T", "1/64" }, 2));
@@ -589,21 +591,12 @@ double OrchHarpAudioProcessor::bisbRateInBeats() const
     return beats[static_cast<size_t> (idx)];
 }
 
-bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::uint8 velocity,
-                                           int samplePosition, double eventPpq)
+void OrchHarpAudioProcessor::startBisb (int noteNumber, int channel, juce::uint8 velocity,
+                                        int samplePosition, double eventPpq)
 {
-    const int lo = bisbLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbLoNoteParam->load())) : 0;
-    const int hi = bisbHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbHiNoteParam->load())) : 0;
-    if (lo == 0 && hi == 0)
-        return false;
-    const int zLo = juce::jmin (lo, hi);
-    const int zHi = juce::jmax (lo, hi);
-    if (noteNumber < zLo || noteNumber > zHi)
-        return false;
-
-    // The note you play IS the pitch that rustles, snapped to a string and
-    // octave-folded into the harp's real range - so the zone can sit out of the
-    // way (like the trigger zones) and still sound in register.
+    // Called only while bisb is armed. The note you play IS the pitch that
+    // rustles, snapped to a string (and octave-folded into the harp's range as
+    // a safety, in case an out-of-range note is played).
     int noteA = ohrp::nearestStringNote (noteNumber, soundingDiagram);
     while (noteA < 24  && noteA + 12 <= 127) noteA += 12;
     while (noteA > 103 && noteA - 12 >= 0)   noteA -= 12;
@@ -628,7 +621,6 @@ bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::ui
     const juce::ScopedLock sl (pedalMarkerLock);
     if (pedalMarkerLog.size() < 4096)
         pedalMarkerLog.emplace_back (juce::jmax (0.0, eventPpq), juce::String ("Bisbigliando"));
-    return true;
 }
 
 bool OrchHarpAudioProcessor::stopBisb (int channel, int noteNumber, juce::MidiBuffer& output, int samplePosition)
@@ -797,6 +789,8 @@ void OrchHarpAudioProcessor::resetNoteMap()
     lastGlissNoteUi.store (-1);
     glissActiveCountUi.store (0);
     bisbVoices.clear();
+    bisbArmedByKs = false;
+    bisbArmedByCc = false;
 
     currentGroup.clear();
     currentGroupStartSample = 0;
@@ -1215,9 +1209,20 @@ OrchHarpAudioProcessor::resolveNoteOn (const juce::MidiMessage& message, int sam
         return r;
     }
 
-    // Bisbigliando: a note in the zone is consumed and rustles as a tremolo.
-    if (tryStartBisb (inputNote, r.channel, r.velocity, samplePosition, eventPpq))
+    // Bisbigliando keyswitch: the KS note held = arm the mode, swallowed.
+    const int bisbKs = bisbKsNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbKsNoteParam->load())) : 0;
+    if (bisbKs != 0 && inputNote == bisbKs)
     {
+        bisbArmedByKs = true;
+        r.consumed = true;
+        r.action = 7;
+        return r;
+    }
+
+    // While armed, every note you play rustles as a tremolo instead of sounding once.
+    if (bisbArmed())
+    {
+        startBisb (inputNote, r.channel, r.velocity, samplePosition, eventPpq);
         r.consumed = true;
         r.action = 7;
         return r;
@@ -1686,6 +1691,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         // before we bow out, so nothing hangs.
         flushGlissNotes (midiMessages, 0);
         flushBisb (midiMessages, 0);
+        bisbArmedByKs = false;
         currentGroup.clear();
         if (! activeNotes.empty())
             resetNoteMap();
@@ -1722,6 +1728,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         {
             flushGlissNotes (output, 0); // transport stop: damp everything
             flushBisb (output, 0);
+            bisbArmedByKs = false;       // KS is a momentary gesture; CC keeps its latched state
             currentGroup.clear();        // drop any half-built group (never sounded)
             lastContourInput = -1;       // and start the next phrase fresh
             contourStackDepth = 0;
@@ -1774,6 +1781,14 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
             if (channelOk && handleGlissCc (message, samplePosition, output))
                 continue; // gliss CCs are consumed, not passed downstream
 
+            const int bisbCc = bisbCcParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbCcParam->load())) : 0;
+            if (channelOk && bisbCc != 0 && message.getControllerNumber() == bisbCc)
+            {
+                bisbArmedByCc = message.getControllerValue() >= 64;
+                lastCc.store (bisbCc);
+                continue; // the arm CC is consumed
+            }
+
             if (channelOk)
                 handleControlCc (message);
 
@@ -1808,8 +1823,15 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (message.isNoteOff())
         {
+            const int bisbKs = bisbKsNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbKsNoteParam->load())) : 0;
+            if (bisbKs != 0 && message.getNoteNumber() == bisbKs)
+            {
+                bisbArmedByKs = false; // running tremolos keep going until their own note-off
+                continue;
+            }
+
             if (stopBisb (message.getChannel(), message.getNoteNumber(), output, samplePosition))
-                continue; // the trigger note ran a bisbigliando; its note-off ends it
+                continue; // a note that rustled; its note-off ends the tremolo
 
             // A note-off means the chord that was building is being released -
             // close the group so its note-ons are tracked before we pair.

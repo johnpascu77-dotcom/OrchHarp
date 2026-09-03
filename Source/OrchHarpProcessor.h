@@ -114,8 +114,8 @@ private:
     std::atomic<float>* glissRunHiNoteParam = nullptr;
     std::atomic<float>* glissRunDirectionParam = nullptr;
     std::atomic<float>* glissRunDurationParam = nullptr;
-    std::atomic<float>* bisbLoNoteParam = nullptr;
-    std::atomic<float>* bisbHiNoteParam = nullptr;
+    std::atomic<float>* bisbKsNoteParam = nullptr;
+    std::atomic<float>* bisbCcParam = nullptr;
     std::atomic<float>* bisbRateParam = nullptr;
     std::atomic<float>* bisbEnharmonicParam = nullptr;
 
@@ -253,6 +253,9 @@ private:
         bool sounding = false;
     };
     std::vector<BisbVoice> bisbVoices;
+    bool bisbArmedByKs = false;
+    bool bisbArmedByCc = false;
+    bool bisbArmed() const { return bisbArmedByKs || bisbArmedByCc; }
 
     // ---- Readouts ----
     std::atomic<int> lastInputNote { -1 };
@@ -292,7 +295,7 @@ private:
     void releaseIdleGlissNotes (juce::MidiBuffer& output, int samplePosition);
     void flushGlissNotes (juce::MidiBuffer& output, int samplePosition);
 
-    bool tryStartBisb (int noteNumber, int channel, juce::uint8 velocity, int samplePosition, double eventPpq);
+    void startBisb (int noteNumber, int channel, juce::uint8 velocity, int samplePosition, double eventPpq);
     bool stopBisb (int channel, int noteNumber, juce::MidiBuffer& output, int samplePosition);
     void drainBisb (juce::MidiBuffer& output, double ppqPerSample, int numSamples);
     void flushBisb (juce::MidiBuffer& output, int samplePosition);

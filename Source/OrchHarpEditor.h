@@ -121,7 +121,7 @@ private:
     juce::ComboBox glissRunDirectionBox, glissRunDurationBox;
 
     juce::Label bisbLabel, bisbZoneLabel;
-    juce::Slider bisbLoNoteSlider, bisbHiNoteSlider;
+    juce::Slider bisbKsNoteSlider, bisbCcSlider;
     juce::ComboBox bisbRateBox;
     juce::ToggleButton bisbEnharmonicButton;
 
@@ -154,7 +154,7 @@ private:
     std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment;
     std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment, glissRunLoNoteAttachment, glissRunHiNoteAttachment;
     std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissReleaseAttachment, glissRunDirectionAttachment, glissRunDurationAttachment;
-    std::unique_ptr<SliderAttachment> bisbLoNoteAttachment, bisbHiNoteAttachment;
+    std::unique_ptr<SliderAttachment> bisbKsNoteAttachment, bisbCcAttachment;
     std::unique_ptr<ComboBoxAttachment> bisbRateAttachment;
     std::unique_ptr<ButtonAttachment> bisbEnharmonicAttachment;
 

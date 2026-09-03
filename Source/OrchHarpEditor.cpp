@@ -612,15 +612,15 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     bisbLabel.setText ("Bisbigliando", juce::dontSendNotification);
     styleLabel (bisbLabel, 13.0f, true);
     addAndMakeVisible (bisbLabel);
-    bisbZoneLabel.setText ("Zone lo / hi / rate  (0/0 = off; note in zone rustles)", juce::dontSendNotification);
+    bisbZoneLabel.setText ("Keyswitch note / arm CC / rate  (held or CC>=64 -> notes rustle)", juce::dontSendNotification);
     styleLabel (bisbZoneLabel, 12.0f);
     addAndMakeVisible (bisbZoneLabel);
-    initNoteIncDec (bisbLoNoteSlider);
-    initNoteIncDec (bisbHiNoteSlider);
-    addAndMakeVisible (bisbLoNoteSlider);
-    addAndMakeVisible (bisbHiNoteSlider);
-    bisbLoNoteAttachment = std::make_unique<SliderAttachment> (params, "bisbLoNote", bisbLoNoteSlider);
-    bisbHiNoteAttachment = std::make_unique<SliderAttachment> (params, "bisbHiNote", bisbHiNoteSlider);
+    initNoteIncDec (bisbKsNoteSlider);
+    initIncDec (bisbCcSlider, 0, 127);
+    addAndMakeVisible (bisbKsNoteSlider);
+    addAndMakeVisible (bisbCcSlider);
+    bisbKsNoteAttachment = std::make_unique<SliderAttachment> (params, "bisbKsNote", bisbKsNoteSlider);
+    bisbCcAttachment = std::make_unique<SliderAttachment> (params, "bisbCc", bisbCcSlider);
     bisbRateBox.addItemList ({ "1/16", "1/16T", "1/32", "1/32T", "1/64" }, 1);
     styleBox (bisbRateBox);
     addAndMakeVisible (bisbRateBox);
@@ -826,7 +826,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
         &triggerGlissLabel, &glissTrigZoneLabel, &glissTrigLoSlider, &glissTrigHiSlider,
         &glissRunWindowLabel, &glissRunLoNoteSlider, &glissRunHiNoteSlider,
         &glissRunDirLabel, &glissRunDirectionBox, &glissRunDurationBox,
-        &bisbLabel, &bisbZoneLabel, &bisbLoNoteSlider, &bisbHiNoteSlider,
+        &bisbLabel, &bisbZoneLabel, &bisbKsNoteSlider, &bisbCcSlider,
         &bisbRateBox, &bisbEnharmonicButton });
 
     refreshBankCells();
@@ -1089,10 +1089,10 @@ void OrchHarpAudioProcessorEditor::layoutMotionTab()
     bisbLabel.setBounds (area.removeFromTop (18));
     {
         auto row = area.removeFromTop (26);
-        bisbZoneLabel.setBounds (row.removeFromLeft (lblW));
-        bisbLoNoteSlider.setBounds (row.removeFromLeft (noteW));
+        bisbZoneLabel.setBounds (row.removeFromLeft (lblW + 60));
+        bisbKsNoteSlider.setBounds (row.removeFromLeft (noteW));
         row.removeFromLeft (8);
-        bisbHiNoteSlider.setBounds (row.removeFromLeft (noteW));
+        bisbCcSlider.setBounds (row.removeFromLeft (noteW));
         row.removeFromLeft (12);
         bisbRateBox.setBounds (row.removeFromLeft (88));
         row.removeFromLeft (10);
@@ -1206,7 +1206,7 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     glissReleaseBox.setEnabled (pedalMode);
     glissRunDirectionBox.setEnabled (pedalMode);
     glissRunDurationBox.setEnabled (pedalMode);
-    for (auto* c : { &bisbLoNoteSlider, &bisbHiNoteSlider })
+    for (auto* c : { &bisbKsNoteSlider, &bisbCcSlider })
         c->setEnabled (pedalMode);
     bisbRateBox.setEnabled (pedalMode);
     bisbEnharmonicButton.setEnabled (pedalMode);
