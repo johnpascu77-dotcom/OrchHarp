@@ -398,14 +398,14 @@ cross-block carry) and each group runs `ohrp::selectVoices`:
    *variants* of a monophonic line, use `splitMode = Off` on both and differ by
    contour step / diagram — split divides a texture, it doesn't duplicate a line.
 2. **Range** — `rangeMode` *Min/Max* (`handLoNote..handHiNote`, unchanged) or
-   *Center/Span* (`handCenter` ± `handSpan`/2). Center/Span first
-   `ohrp::foldToCenter`s each note toward `handCenter` then
-   `nearestStringNote`-snaps it to the live diagram (travel that stays on the
-   strings) → sweep `handCenter` by automation and a static rhythmic input
-   climbs / falls with it, per instance = one harpist's hand. `outOfRange`
-   (Drop / Fold-octave / Clamp) then applies at the window edge; a Clamp result
-   re-snaps to the diagram too. Design intent: the same primitive ports to a
-   piano sibling by swapping the string-snap for the piano's constraints.
+   *Center/Span* (`handCenter` ± `handSpan`/2). Center/Span transposes each note
+   by `(handCenter - 60)` semitones then `ohrp::travelNote`-snaps it to the
+   nearest string of the live diagram → sweeping `handCenter` by automation
+   walks the material **stepwise along the pedal scale** (through the adjacent
+   degrees, not by octave jumps), per instance = one harpist's hand. The span
+   window then octave-folds / clamps anything outside it; `outOfRange`
+   (Drop / Fold / Clamp) is the hard edge. Design intent: the primitive ports
+   to a piano sibling by swapping the string-snap for the piano's constraints.
 3. **Poly cap** — `maxVoices` per group; drop the note nearest the median,
    never a protected end.
 4. **Span** — `maxSpan` (a 10th); `overSpan` = *Drop Widest* (selectVoices drops

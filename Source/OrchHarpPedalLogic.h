@@ -74,11 +74,13 @@ namespace ohrp
     // as the input): used by BlackKeyMode::Nearest.
     int nearestStringNote (int noteNumber, const Diagram& diagram) noexcept;
 
-    // Octave-shift `note` so it lands in the octave nearest `centerNote` (ties
-    // resolve downward). This is the "hand travels" primitive: sweep centerNote
-    // by automation and a static rhythmic input climbs / falls with it, octave
-    // by octave. Result stays 0..127.
-    int foldToCenter (int note, int centerNote) noexcept;
+    // Center-note travel: shift `inputNote` by (centerNote - anchorNote)
+    // semitones, then snap to the nearest string of `diagram`. This is the
+    // "hand travels" primitive - sweep centerNote by automation and a static
+    // rhythmic input walks stepwise up / down the pedal scale (through the
+    // adjacent degrees, not by octave jumps). centerNote == anchorNote is the
+    // identity before the snap. Result stays 0..127.
+    int travelNote (int inputNote, int centerNote, int anchorNote, const Diagram& diagram) noexcept;
 
     // ---- Glissando engine (Phase 2) --------------------------------------
     //

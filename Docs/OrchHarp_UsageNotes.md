@@ -58,12 +58,14 @@ group is filtered:
 - **Max voices** — notes kept per hand per placement (4 = a hand).
 - **Range mode** — *Min/Max* (the hand window is **Hand low / high note**) or
   *Center/Span* (the window is **Center note** ± **Span**/2). In Center/Span
-  every note first octave-folds toward Center, then re-snaps to the live pedal
-  diagram — so if you **automate Center note** during playback the hand travels
-  through registers, octave by octave, and never leaves the strings. Works from
-  a single repeated note: a rhythm on one pitch climbs and falls with the knob.
-  This is one harpist's hand; give the two instances their own Center automation
-  (a Random modulator at different rates) for two independent travelling hands.
+  every note is transposed by (Center − 60) semitones and snapped to the nearest
+  string — so **automating Center note** during playback walks the material
+  **stepwise up and down the pedal scale**, through the adjacent notes (not by
+  octave jumps). Center 60 = no shift. Works from a single repeated note: a
+  rhythm on one pitch walks the scale with the knob. This is one harpist's hand;
+  give the two instances their own Center automation (a Random modulator at
+  different rates) for two independent travelling hands. **Span** keeps the
+  result near Center — anything past the window octave-folds or clamps back.
 - **Hand low / high note** / **Center note / span** + **out-of-range** — Drop /
   Fold an octave / Clamp, applied at the window edge.
 - **Max span** — the widest reach (16 semitones = a 10th). **Over-span**:

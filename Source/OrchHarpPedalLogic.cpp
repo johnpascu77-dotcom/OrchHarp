@@ -155,12 +155,9 @@ namespace ohrp
         return clampNote (12 * octave + stringSemitone (letter, diagram));
     }
 
-    int foldToCenter (int note, int centerNote) noexcept
+    int travelNote (int inputNote, int centerNote, int anchorNote, const Diagram& diagram) noexcept
     {
-        centerNote = std::clamp (centerNote, 0, 127);
-        while (centerNote - note > 6 && note + 12 <= 127) note += 12;
-        while (note - centerNote > 6 && note - 12 >= 0)    note -= 12;
-        return std::clamp (note, 0, 127);
+        return nearestStringNote (clampNote (inputNote + centerNote - anchorNote), diagram);
     }
 
     int nearestStringNote (int noteNumber, const Diagram& diagram) noexcept

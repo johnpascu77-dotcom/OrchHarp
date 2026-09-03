@@ -1282,10 +1282,11 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
     lastVoicedSeen.store (static_cast<int> (group.size()));
 
     // Per-hand range. Min/Max mode: the note window is [handLoNote, handHiNote].
-    // Center/Span mode: it is handCenter +/- handSpan/2, and every note first
-    // octave-folds toward handCenter (the "hand travels" primitive - sweep
-    // handCenter by automation and a static rhythmic input climbs with it) then
-    // re-snaps to the live pedal diagram so the travel never leaves the strings.
+    // Center/Span mode: it is handCenter +/- handSpan/2, and every note is
+    // transposed by (handCenter - 60) then snapped to the nearest string (the
+    // "hand travels" primitive - sweep handCenter by automation and a static
+    // rhythmic input walks stepwise along the pedal scale). The span window
+    // then octave-folds / clamps whatever lands outside it.
     const int rangeMode  = rangeModeParam != nullptr ? juce::jlimit (0, 1, juce::roundToInt (rangeModeParam->load())) : 0;
     const bool centerSpan = rangeMode == 1;
     const int oor = outOfRangeParam != nullptr ? juce::jlimit (0, 2, juce::roundToInt (outOfRangeParam->load())) : 1;
@@ -1310,11 +1311,10 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
         int n = it->outputNote;
 
         if (centerSpan)
-        {
-            n = ohrp::foldToCenter (n, centerNote);
-            n = ohrp::nearestStringNote (n, soundingDiagram); // stay pedal-correct
-            n = ohrp::foldToCenter (n, centerNote);           // snap may have nudged an octave
-        }
+            // Center as a transposition (60 = neutral): shift, then snap to the
+            // nearest string -> sweeping handCenter walks the note stepwise
+            // along the pedal scale, through the adjacent degrees.
+            n = ohrp::travelNote (n, centerNote, 60, soundingDiagram);
 
         if (n >= hLo && n <= hHi) { it->outputNote = juce::jlimit (0, 127, n); ++it; continue; }
 
