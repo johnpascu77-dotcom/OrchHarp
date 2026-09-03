@@ -246,9 +246,9 @@ private:
         int inputNote = 0;
         int noteA = -1;
         int noteB = -1;
-        int cur = -1;           // the pitch currently sounding
+        int cur = -1;              // the pitch currently sounding
         juce::uint8 velocity = 96;
-        double nextPpq = 0.0;
+        double samplesToNext = 0.0; // sample-clocked so it runs with the transport stopped too
         bool onB = false;
         bool sounding = false;
     };
@@ -292,10 +292,9 @@ private:
     void releaseIdleGlissNotes (juce::MidiBuffer& output, int samplePosition);
     void flushGlissNotes (juce::MidiBuffer& output, int samplePosition);
 
-    bool tryStartBisb (int noteNumber, int channel, juce::uint8 velocity, double eventPpq);
+    bool tryStartBisb (int noteNumber, int channel, juce::uint8 velocity, int samplePosition, double eventPpq);
     bool stopBisb (int channel, int noteNumber, juce::MidiBuffer& output, int samplePosition);
-    void drainBisb (juce::MidiBuffer& output, double blockStartPpq, double blockEndPpq,
-                    double ppqPerSample, int numSamples);
+    void drainBisb (juce::MidiBuffer& output, double ppqPerSample, int numSamples);
     void flushBisb (juce::MidiBuffer& output, int samplePosition);
     double bisbRateInBeats() const;
 

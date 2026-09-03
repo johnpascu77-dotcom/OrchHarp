@@ -589,7 +589,8 @@ double OrchHarpAudioProcessor::bisbRateInBeats() const
     return beats[static_cast<size_t> (idx)];
 }
 
-bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::uint8 velocity, double eventPpq)
+bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::uint8 velocity,
+                                           int samplePosition, double eventPpq)
 {
     const int lo = bisbLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbLoNoteParam->load())) : 0;
     const int hi = bisbHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbHiNoteParam->load())) : 0;
@@ -600,7 +601,13 @@ bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::ui
     if (noteNumber < zLo || noteNumber > zHi)
         return false;
 
-    const int noteA = ohrp::whiteKeyToStringNote (noteNumber, soundingDiagram);
+    // The note you play IS the pitch that rustles, snapped to a string and
+    // octave-folded into the harp's real range - so the zone can sit out of the
+    // way (like the trigger zones) and still sound in register.
+    int noteA = ohrp::nearestStringNote (noteNumber, soundingDiagram);
+    while (noteA < 24  && noteA + 12 <= 127) noteA += 12;
+    while (noteA > 103 && noteA - 12 >= 0)   noteA -= 12;
+
     int noteB = noteA;
     const bool rock = bisbEnharmonicParam != nullptr && bisbEnharmonicParam->load() >= 0.5f;
     if (rock)
@@ -615,7 +622,7 @@ bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::ui
     v.noteA = noteA;
     v.noteB = noteB;
     v.velocity = static_cast<juce::uint8> (juce::jmax (1, static_cast<int> (velocity)));
-    v.nextPpq = eventPpq;
+    v.samplesToNext = static_cast<double> (juce::jmax (0, samplePosition)); // first note at the trigger point
     bisbVoices.push_back (v);
 
     const juce::ScopedLock sl (pedalMarkerLock);
@@ -639,28 +646,32 @@ bool OrchHarpAudioProcessor::stopBisb (int channel, int noteNumber, juce::MidiBu
     return false;
 }
 
-void OrchHarpAudioProcessor::drainBisb (juce::MidiBuffer& output, double blockStartPpq, double blockEndPpq,
-                                        double ppqPerSample, int numSamples)
+void OrchHarpAudioProcessor::drainBisb (juce::MidiBuffer& output, double ppqPerSample, int numSamples)
 {
-    if (bisbVoices.empty() || ppqPerSample <= 0.0)
+    if (bisbVoices.empty() || numSamples <= 0)
         return;
-    const double rate = juce::jmax (1.0e-4, bisbRateInBeats());
+
+    // Sample-clocked so the tremolo runs whether or not the transport moves.
+    const double samplesPerBeat = ppqPerSample > 0.0 ? (1.0 / ppqPerSample)
+                                                     : juce::jmax (1.0, sampleRate * 0.5); // ~120 bpm fallback
+    const double rateSamples = juce::jmax (16.0, bisbRateInBeats() * samplesPerBeat);
 
     for (auto& v : bisbVoices)
     {
         int guard = 0;
-        while (v.nextPpq < blockEndPpq && guard++ < 512)
+        while (v.samplesToNext < numSamples && guard++ < 512)
         {
-            const int sp = juce::jlimit (0, juce::jmax (0, numSamples - 1),
-                                         juce::roundToInt ((v.nextPpq - blockStartPpq) / ppqPerSample));
+            const int sp = juce::jlimit (0, numSamples - 1,
+                                         static_cast<int> (v.samplesToNext > 0.0 ? v.samplesToNext : 0.0));
             if (v.sounding && v.cur >= 0)
                 output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, v.cur), sp);
             v.cur = v.onB ? v.noteB : v.noteA;
             output.addEvent (juce::MidiMessage::noteOn (glissEmitChannel, v.cur, v.velocity), sp);
             v.sounding = true;
             v.onB = ! v.onB;
-            v.nextPpq += rate;
+            v.samplesToNext += rateSamples;
         }
+        v.samplesToNext -= numSamples; // carry the remainder into the next block
     }
 }
 
@@ -1205,7 +1216,7 @@ OrchHarpAudioProcessor::resolveNoteOn (const juce::MidiMessage& message, int sam
     }
 
     // Bisbigliando: a note in the zone is consumed and rustles as a tremolo.
-    if (tryStartBisb (inputNote, r.channel, r.velocity, eventPpq))
+    if (tryStartBisb (inputNote, r.channel, r.velocity, samplePosition, eventPpq))
     {
         r.consumed = true;
         r.action = 7;
@@ -1835,8 +1846,8 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     // Emit any scheduled trigger-run notes that fall in this block.
     drainPendingGliss (output, blockStartPpq, blockEndPpq, ppqPerSample, numSamples);
 
-    // Advance any active bisbigliando tremolos.
-    drainBisb (output, blockStartPpq, blockEndPpq, ppqPerSample, numSamples);
+    // Advance any active bisbigliando tremolos (sample-clocked).
+    drainBisb (output, ppqPerSample, numSamples);
 
     // Release a held contour note once the CC has been still long enough
     // (so the last note of a run gets a real duration for notation).

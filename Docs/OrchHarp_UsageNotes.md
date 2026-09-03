@@ -311,10 +311,13 @@ span. No base-octave guessing — the two notes say exactly where it runs.
 
 The harp "whisper" — a fast measured tremolo on one pitch. Hold a note in the
 bisb zone and it rustles until you release it; a **Bisbigliando** marker goes to
-the score.
+the score. The tremolo runs with the transport stopped too.
 
-- **Bisb zone lo / hi** — the trigger range. **0 / 0 = off.** Keep it clear of
-  the harp's playing range (e.g. MIDI 16–19).
+- **Bisb zone lo / hi** — the note range that triggers a bisbigliando. **0 / 0 =
+  off.** The **note you play IS the pitch that rustles** (snapped to a string).
+  It's octave-folded into the harp's range, so the zone can sit low and out of
+  the way and still sound in register — but if you want to *choose* the rustle
+  pitch by which note you play, put the zone somewhere musical (e.g. C3–C6).
 - **Bisb rate** — the tremolo subdivision (1/16 … 1/64, straight or triplet),
   tempo-synced.
 - **Enharmonic rock** — off: repeats the one note (the standard tremolo Dorico
