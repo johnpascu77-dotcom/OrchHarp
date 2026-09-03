@@ -198,10 +198,12 @@ int main()
         check (steps >= 0, "governor converges to an all-flat target");
         check (steps == 4, "all-natural -> all-flat takes 4 moves (max(3 left, 4 right))");
 
-        // flat -> sharp is two notches: one move per notch under this build.
+        // flat -> sharp is ONE governor move: the pedal swings the whole way
+        // (through the natural notch) in one foot gesture.
         Diagram cFlat = kAllNatural;  cFlat[0]  = -1;
         Diagram cSharp = kAllNatural; cSharp[0] = +1;
-        checkInt (stepsToConverge (cFlat, cSharp), 2, "one pedal flat -> sharp takes 2 moves (one notch each)");
+        checkInt (stepsToConverge (cFlat, cSharp), 1, "one pedal flat -> sharp is a single governor move");
+        checkInt (playablePedalStep (cFlat, cSharp, MoveInfo {})[0], +1, "flat -> sharp lands on sharp in one step");
 
         // A new target arriving mid-transition re-aims from the current diagram.
         Diagram halfway = playablePedalStep (start, allFlat, MoveInfo {});

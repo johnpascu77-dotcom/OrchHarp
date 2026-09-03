@@ -561,9 +561,11 @@ namespace ohrp
             if (letter < 0)
                 continue;
 
-            const int cur = current[static_cast<size_t> (letter)];
-            const int tgt = target[static_cast<size_t> (letter)];
-            out[static_cast<size_t> (letter)] = cur + (cur < tgt ? 1 : -1);
+            // Move the pedal the whole way to its target in one step: a harp
+            // pedal is one foot gesture from flat through natural to sharp
+            // (the notch is passed, not stopped at). At most one pedal per
+            // foot still moves per governor step.
+            out[static_cast<size_t> (letter)] = std::clamp (target[static_cast<size_t> (letter)], -1, 1);
         }
 
         return out;

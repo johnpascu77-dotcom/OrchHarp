@@ -455,13 +455,11 @@ Phase 1 resolutions (2026-09-01):
   distance. Exact for 7-note scales, enharmonic doubling for smaller sets.
   `familyVariantKeyToDiagram` and the factory bank both go through it.
 - **Governor heuristic** — simple: per foot, step the first disagreeing pedal
-  that isn't the one that foot moved last (spreads the work), one notch toward
-  target. "Pedal whose string is imminent" weighting deferred until tuned
-  against a real sonata.
-- **♭→♯ is two moves** in this build (one notch per move), not one — slightly
-  conservative vs §6. TODO: allow the full swing as one move once tuned live.
-- **4/4 assumed** for `minChangeInterval` beat math (1/8=0.5 … 2 bars=8 beats).
-  Time-signature-aware version is a later refinement.
+  that isn't the one that foot moved last (spreads the work), the **whole way**
+  to its target (§6 — one foot gesture through the notch). "Pedal whose string
+  is imminent" weighting deferred until tuned against a real sonata.
+- **♭→♯ is one move** (done): `playablePedalStep` jumps the picked pedal
+  straight to `target`, still ≤1 pedal per foot per step.
 
 Still open:
 

@@ -197,6 +197,7 @@ private:
     double sampleRate = 44100.0;
     double integratedPpq = 0.0;
     bool wasPlaying = false;
+    double beatsPerBar = 4.0; // host time signature in quarter-note beats; latched at transport start
 
     // ---- Pedal-marker sidecar --------------------------------------------
     // On transport stop OrchHarp writes every requested-diagram change of the

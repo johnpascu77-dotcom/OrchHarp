@@ -9,12 +9,11 @@ namespace
     int offsetFromChoiceIndex (int index) noexcept { return juce::jlimit (-1, 1, index - 1); }
     int choiceIndexFromOffset (int offset) noexcept { return juce::jlimit (0, 2, offset + 1); }
 
-    // minChangeInterval choice -> beats (4/4 assumed; a time-signature-aware
-    // version is a later refinement - see design doc §6 / §12).
-    const std::array<double, 5> kIntervalBeats { 0.5, 1.0, 2.0, 4.0, 8.0 };
 
     // glissRunDuration choice -> total run length in beats (4/4 assumed):
     // 1/16, 1/8, 1/4, 1/2, 1 bar.
+    // glissRunDuration: 1/16, 1/8, 1/4, 1/2 are note values; "1 bar" follows
+    // the meter (handled at the call site).
     const std::array<double, 5> kRunDurationBeats { 0.25, 0.5, 1.0, 2.0, 4.0 };
 
     constexpr int kMaxRingingGliss = 256;
@@ -169,12 +168,13 @@ void OrchHarpAudioProcessor::writePedalMarkerFile()
     if (log.empty())
         return;
 
+    const double bpbar = beatsPerBar > 0.0 ? beatsPerBar : 4.0;
     juce::String body;
     for (const auto& entry : log)
     {
-        // 4/4 assumed (matches OrchHarp's governor + OrchCapture's bar math);
-        // bar is 1-indexed, take start == bar 1.
-        const double bar = entry.first / 4.0 + 1.0;
+        // bar is 1-indexed (take start == bar 1); bpbar = the host time
+        // signature latched at transport start (constant-meter assumption).
+        const double bar = entry.first / bpbar + 1.0;
         body << juce::String (bar, 4) << ':' << "Harp pedals: " << entry.second << '\n';
     }
 
@@ -514,15 +514,25 @@ double OrchHarpAudioProcessor::minChangeIntervalInBeats() const
 {
     const int idx = minChangeIntervalParam != nullptr
         ? juce::jlimit (0, 4, juce::roundToInt (minChangeIntervalParam->load())) : 1;
-    return kIntervalBeats[static_cast<size_t> (idx)];
+    const double bpbar = beatsPerBar > 0.0 ? beatsPerBar : 4.0;
+    switch (idx) // 1/8, 1/4, 1/2 are note values; the last two follow the meter
+    {
+        case 0:  return 0.5;
+        case 1:  return 1.0;
+        case 2:  return 2.0;
+        case 3:  return bpbar;          // 1 bar
+        default: return 2.0 * bpbar;    // 2 bars
+    }
 }
 
 double OrchHarpAudioProcessor::glissReleaseInBeats() const
 {
-    // Choice: Hold / 1/8 / 1/4 / 1/2 / 1 bar.
+    // Choice: Hold / 1/8 / 1/4 / 1/2 / 1 bar (the last follows the meter).
     static const std::array<double, 5> beats { 0.0, 0.5, 1.0, 2.0, 4.0 };
     const int idx = glissReleaseParam != nullptr
         ? juce::jlimit (0, 4, juce::roundToInt (glissReleaseParam->load())) : 2;
+    if (idx >= 4)
+        return beatsPerBar > 0.0 ? beatsPerBar : 4.0;
     return beats[static_cast<size_t> (idx)];
 }
 
@@ -927,7 +937,8 @@ bool OrchHarpAudioProcessor::tryStartTriggerRun (int noteNumber, juce::uint8 vel
         return true;
 
     const int durIdx = juce::jlimit (0, 4, readNum (glissRunDurationParam, 2));
-    const double durBeats = kRunDurationBeats[static_cast<size_t> (durIdx)];
+    const double durBeats = durIdx >= 4 ? (beatsPerBar > 0.0 ? beatsPerBar : 4.0)
+                                        : kRunDurationBeats[static_cast<size_t> (durIdx)];
     const int n = static_cast<int> (indices.size());
 
     for (int k = 0; k < n; ++k)
@@ -1464,6 +1475,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     double bpm = 120.0;
     double blockStartPpq = integratedPpq;
 
+    double hostBeatsPerBar = 4.0;
     if (auto* transport = getPlayHead())
     {
         if (const auto pos = transport->getPosition())
@@ -1476,6 +1488,8 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
                 blockStartPpq = *ppq;
                 havePpq = true;
             }
+            if (const auto ts = pos->getTimeSignature(); ts && ts->numerator > 0 && ts->denominator > 0)
+                hostBeatsPerBar = ts->numerator * 4.0 / ts->denominator; // in quarter-note beats
         }
     }
 
@@ -1550,6 +1564,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         lastContourInput = -1;
         contourStackDepth = 0;
         snapSoundingToRequested (requested);
+        beatsPerBar = hostBeatsPerBar > 0.0 ? hostBeatsPerBar : 4.0; // latch for the take
         {
             const juce::ScopedLock sl (pedalMarkerLock);
             pedalMarkerLog.clear();       // new take
