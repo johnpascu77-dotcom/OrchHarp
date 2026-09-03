@@ -66,6 +66,9 @@ group is filtered:
   give the two instances their own Center automation (a Random modulator at
   different rates) for two independent travelling hands. **Span** keeps the
   result near Center — anything past the window octave-folds or clamps back.
+  **Hand low / high note stays the hard reach limit in both modes** — a
+  travelling Center is clipped into it, so the hand can't run off the
+  instrument; drive Center past the limit and the hand pins at its edge.
 - **Hand low / high note** / **Center note / span** + **out-of-range** — Drop /
   Fold an octave / Clamp, applied at the window edge.
 - **Max span** — the widest reach (16 semitones = a 10th). **Over-span**:

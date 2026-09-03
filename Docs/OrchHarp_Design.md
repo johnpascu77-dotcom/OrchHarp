@@ -402,10 +402,13 @@ cross-block carry) and each group runs `ohrp::selectVoices`:
    by `(handCenter - 60)` semitones then `ohrp::travelNote`-snaps it to the
    nearest string of the live diagram → sweeping `handCenter` by automation
    walks the material **stepwise along the pedal scale** (through the adjacent
-   degrees, not by octave jumps), per instance = one harpist's hand. The span
-   window then octave-folds / clamps anything outside it; `outOfRange`
-   (Drop / Fold / Clamp) is the hard edge. Design intent: the primitive ports
-   to a piano sibling by swapping the string-snap for the piano's constraints.
+   degrees, not by octave jumps), per instance = one harpist's hand.
+   `handLoNote..handHiNote` is the **hard reach limit in both modes** — the
+   Center/Span window is clipped into it (`jlimit(absLo, absHi, center ± sp/2)`),
+   so a travelling Center pins at the hand's edge instead of running off the
+   instrument. `outOfRange` (Drop / Fold / Clamp) then trims to the clipped
+   window. Design intent: the primitive ports to a piano sibling by swapping
+   the string-snap for the piano's constraints.
 3. **Poly cap** — `maxVoices` per group; drop the note nearest the median,
    never a protected end.
 4. **Span** — `maxSpan` (a 10th); `overSpan` = *Drop Widest* (selectVoices drops

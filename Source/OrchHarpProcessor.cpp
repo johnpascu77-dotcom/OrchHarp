@@ -1291,18 +1291,26 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
     const bool centerSpan = rangeMode == 1;
     const int oor = outOfRangeParam != nullptr ? juce::jlimit (0, 2, juce::roundToInt (outOfRangeParam->load())) : 1;
 
+    // Hand Low / High Note is the hand's hard reach limit in BOTH modes.
+    const int rawLo = handLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handLoNoteParam->load())) : 24;
+    const int rawHi = handHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handHiNoteParam->load())) : 103;
+    const int absLo = juce::jmin (rawLo, rawHi);
+    const int absHi = juce::jmax (rawLo, rawHi);
+
     int hLo, hHi, centerNote;
     if (centerSpan)
     {
         centerNote   = handCenterParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handCenterParam->load())) : 60;
         const int sp = handSpanParam   != nullptr ? juce::jlimit (2, 72,  juce::roundToInt (handSpanParam->load()))   : 44;
-        hLo = juce::jlimit (0, 127, centerNote - sp / 2);
-        hHi = juce::jlimit (0, 127, centerNote + sp / 2);
+        // Center/Span says where the hand sits + how wide; clip it into the
+        // hard reach limit so a travelling Center can't run off the instrument.
+        hLo = juce::jlimit (absLo, absHi, centerNote - sp / 2);
+        hHi = juce::jlimit (absLo, absHi, centerNote + sp / 2);
     }
     else
     {
-        hLo = handLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handLoNoteParam->load())) : 24;
-        hHi = handHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handHiNoteParam->load())) : 103;
+        hLo = absLo;
+        hHi = absHi;
         centerNote = (hLo + hHi) / 2;
     }
 

@@ -1171,8 +1171,8 @@ void OrchHarpAudioProcessorEditor::timerCallback()
              &overSpanBox, &protectBox,
              &voicingHandLabel, &voicingCapLabel, &voicingRangeLabel, &voicingSpanLabel, &voicingProtectLabel })
         c->setEnabled (voicing);
-    handLoNoteSlider.setEnabled (voicing && ! centerSpan);
-    handHiNoteSlider.setEnabled (voicing && ! centerSpan);
+    handLoNoteSlider.setEnabled (voicing);   // hard reach limit in both modes
+    handHiNoteSlider.setEnabled (voicing);
     handCenterSlider.setEnabled (voicing && centerSpan);
     handSpanSlider.setEnabled (voicing && centerSpan);
     voicingCenterLabel.setEnabled (voicing && centerSpan);
