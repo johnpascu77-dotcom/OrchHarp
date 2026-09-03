@@ -1563,6 +1563,23 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
     std::vector<bool> keep (group.size(), false);
     for (int i : keptIdx) keep[static_cast<size_t> (i)] = true;
 
+    // Exclude duplicates: two repitched notes of a stack / chord can land on the
+    // same string (enharmonic doubling in the diagram, or a window clamp folding
+    // two degrees together). One notehead per string - keep the first, swallow
+    // the rest, so Dorico never gets a unison on one stem.
+    {
+        std::vector<int> seenOut;
+        for (size_t i = 0; i < group.size(); ++i)
+        {
+            if (! keep[i]) continue;
+            const int on = group[i].outputNote;
+            if (std::find (seenOut.begin(), seenOut.end(), on) != seenOut.end())
+                keep[i] = false;
+            else
+                seenOut.push_back (on);
+        }
+    }
+
     // Roll: if the group was too wide, arpeggiate the survivors instead of a block.
     int staggerSamples = 0;
     if (overSpan == 2 && rawSpan > maxSpan && keptIdx.size() > 1)

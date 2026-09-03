@@ -425,7 +425,13 @@ cross-block carry) and each group runs `ohrp::selectVoices`:
    in-block arpeggio, `rollRate` spacing).
 5. **Protect** — None / Keep Lowest / Keep Highest / Keep Both Ends. **Protect
    wins over span** — if the protected notes alone exceed it, they stay.
-6. **Damp on next attack** (`dampSuccessive`, default on) — as a group flushes
+6. **Exclude duplicates** (always on, no param) — after selection, two kept
+   notes that resolved to the **same output pitch** (enharmonic doubling in the
+   diagram, or a window clamp folding two Contour-Stack degrees together) are
+   de-duped: keep the first, swallow the rest. One notehead per string → Dorico
+   never gets a unison on one stem. The voicing-off path is covered by
+   `emitResolved`'s same-string collision check.
+7. **Damp on next attack** (`dampSuccessive`, default on) — as a group flushes
    with ≥1 survivor, every `activeNotes` entry still ringing from an earlier
    group gets a note-off at the new group's onset and its `outputNote` set to
    −1 (so the real note-off is swallowed). Notes struck together keep their

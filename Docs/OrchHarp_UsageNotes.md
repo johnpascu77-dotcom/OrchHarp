@@ -139,9 +139,46 @@ Pedals*). Nothing to switch on:
   Dorico's harp-pedal popover uses (copy it straight across).
 
 It logs the **requested** diagram (the pedal move you automated), not the
-governor's intermediate steps, and assumes 4/4 for the bar position — same as
-the rest of OrchHarp and OrchCapture. Two instances of a L/R rig both write
-their file; OrchCapture de-duplicates identical changes.
+governor's intermediate steps. Bar positions follow the host time signature
+(constant meter assumed). Two instances of a L/R rig both write their file;
+OrchCapture de-duplicates identical changes.
+
+## Let Composer Mastermind drive the pedals
+
+Instead of automating the pedals or firing bank slots by hand, OrchHarp can read
+**Composer Mastermind's pitch-field broadcast** and re-pedal the harp to match
+the harmony the piece is actually sounding, bar by bar — form drives the pedals.
+
+**In Composer Mastermind** — *Modulators tab → Pitch-field broadcast* panel:
+
+- **Enable** the toggle.
+- **Base CC 110**, **Channel 1** (the defaults — any free CC pair, just match
+  OrchHarp).
+- **Min Bars 4** (or 2) — MC only broadcasts on a change; this holds a change
+  for at least that many bars so the harp re-pedals at phrase scale.
+- Route **MC's track MIDI output → a loopMIDI port** (the same path you use for
+  the modulator CCs).
+
+**In OrchHarp** — *Motion tab → Triggers*:
+
+- **Pitch-field CC base = 110**, **channel = 1** (or 0 = any).
+- **Playability Governor ON**, **Min Change Interval = 1 bar** (or 2) — MC's
+  Min Bars gates when a new target arrives; the governor gates how fast the
+  pedals move to it.
+
+**In Bitwig** — set the OrchHarp track's **MIDI input to that loopMIDI port**
+and keep the harp's musical MIDI as a clip on the same track; Bitwig merges the
+two. For an L/R rig, give both tracks that input — they fit the same diagram and
+stay in sync. Keep MC's *modulator* CC numbers clear of **49** and **110/111**.
+
+**Behaviour** — each bar MC sends the union of pitch classes the piece is
+sounding; OrchHarp fits the closest 7-pedal diagram (doubling leftover letters
+if there are more than 7) and the governor walks the pedals there; the
+`Harp pedals:` markers capture every change. The field **overrides** the bank /
+manual pedals / CC49 whenever a new one arrives — set **Pitch-field CC base =
+0** (or disable MC's broadcast) for manual control. Load OrchHarp mid-session or
+reload the project → hit **Re-sync** in MC's panel. The field CCs pass through
+OrchHarp's output, so a parallel OrchNoteFilter still sees them.
 
 ## The pedal diagram
 
