@@ -127,8 +127,11 @@ private:
     std::atomic<float>* splitNoteParam = nullptr;
     std::atomic<float>* maxVoicesParam = nullptr;
     std::atomic<float>* onsetWindowMsParam = nullptr;
+    std::atomic<float>* rangeModeParam = nullptr;
     std::atomic<float>* handLoNoteParam = nullptr;
     std::atomic<float>* handHiNoteParam = nullptr;
+    std::atomic<float>* handCenterParam = nullptr;
+    std::atomic<float>* handSpanParam = nullptr;
     std::atomic<float>* outOfRangeParam = nullptr;
     std::atomic<float>* maxSpanParam = nullptr;
     std::atomic<float>* overSpanParam = nullptr;

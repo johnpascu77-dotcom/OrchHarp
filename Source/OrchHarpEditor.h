@@ -127,12 +127,12 @@ private:
 
     // ---- Voicing tab ----
     juce::Label voicingHandLabel, voicingSplitLabel, voicingCapLabel, voicingRangeLabel,
-                voicingSpanLabel, voicingProtectLabel;
+                voicingCenterLabel, voicingSpanLabel, voicingProtectLabel;
     juce::ToggleButton voicingEnableButton, dampSuccessiveButton;
     juce::TextButton leftHandPresetButton { "Left hand" }, rightHandPresetButton { "Right hand" };
-    juce::ComboBox handBox, splitModeBox, outOfRangeBox, overSpanBox, rollRateBox, protectBox;
+    juce::ComboBox handBox, splitModeBox, rangeModeBox, outOfRangeBox, overSpanBox, rollRateBox, protectBox;
     juce::Slider splitChanLeftSlider, splitChanRightSlider, splitNoteSlider, maxVoicesSlider, onsetWindowSlider,
-                 handLoNoteSlider, handHiNoteSlider, maxSpanSlider, outChannelSlider;
+                 handLoNoteSlider, handHiNoteSlider, handCenterSlider, handSpanSlider, maxSpanSlider, outChannelSlider;
 
     juce::Label statusLabel;
 
@@ -154,10 +154,11 @@ private:
     std::unique_ptr<SliderAttachment> contourLoNoteAttachment, contourHiNoteAttachment;
 
     std::unique_ptr<ButtonAttachment> voicingEnableAttachment, dampSuccessiveAttachment;
-    std::unique_ptr<ComboBoxAttachment> handAttachment, splitModeAttachment, outOfRangeAttachment,
+    std::unique_ptr<ComboBoxAttachment> handAttachment, splitModeAttachment, rangeModeAttachment, outOfRangeAttachment,
                                         overSpanAttachment, rollRateAttachment, protectAttachment;
     std::unique_ptr<SliderAttachment> splitChanLeftAttachment, splitChanRightAttachment, splitNoteAttachment, maxVoicesAttachment,
                                       onsetWindowAttachment, handLoNoteAttachment, handHiNoteAttachment,
+                                      handCenterAttachment, handSpanAttachment,
                                       maxSpanAttachment, outChannelAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OrchHarpAudioProcessorEditor)

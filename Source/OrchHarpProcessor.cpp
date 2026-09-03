@@ -122,8 +122,11 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     splitNoteParam       = parameters.getRawParameterValue ("splitNote");
     maxVoicesParam       = parameters.getRawParameterValue ("maxVoices");
     onsetWindowMsParam   = parameters.getRawParameterValue ("onsetWindowMs");
+    rangeModeParam       = parameters.getRawParameterValue ("rangeMode");
     handLoNoteParam      = parameters.getRawParameterValue ("handLoNote");
     handHiNoteParam      = parameters.getRawParameterValue ("handHiNote");
+    handCenterParam      = parameters.getRawParameterValue ("handCenter");
+    handSpanParam        = parameters.getRawParameterValue ("handSpan");
     outOfRangeParam      = parameters.getRawParameterValue ("outOfRange");
     maxSpanParam         = parameters.getRawParameterValue ("maxSpan");
     overSpanParam        = parameters.getRawParameterValue ("overSpan");
@@ -311,10 +314,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::ParameterID { "maxVoices", 1 }, "Max Voices", 1, 12, 4));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "onsetWindowMs", 1 }, "Onset Window (ms)", 5, 200, 90));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "rangeMode", 1 }, "Hand Range Mode",
+        juce::StringArray { "Min/Max", "Center/Span" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "handLoNote", 1 }, "Hand Low Note", 0, 127, 24));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "handHiNote", 1 }, "Hand High Note", 0, 127, 103));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "handCenter", 1 }, "Hand Center Note", 0, 127, 60));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "handSpan", 1 }, "Hand Span (semitones)", 2, 72, 44));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "outOfRange", 1 }, "Out Of Range",
         juce::StringArray { "Drop", "Fold Octave", "Clamp" }, 1));
@@ -412,11 +422,15 @@ void OrchHarpAudioProcessor::applyHandPreset (bool left)
     setChoice ("hand", left ? 1 : 2);
     setInt   ("handLoNote", left ? 24 : 43);   // C1  /  G2
     setInt   ("handHiNote", left ? 72 : 103);  // C5  /  G7
+    setInt   ("handCenter", left ? 48 : 74);   // C3  /  D5  - the equivalent
+    setInt   ("handSpan",   36);               // 3 octaves; sweep handCenter to travel
     setChoice ("protect", left ? 1 : 2);       // Keep Lowest  /  Keep Highest
     setChoice ("outOfRange", 1);               // Fold Octave
     setChoice ("splitMode", 1);                // Block - works from any single-channel
                                                // source; switch to Channel if yours
                                                // is genuinely hand-separated
+    // Hand Range Mode is left as the user set it (Min/Max default); switch to
+    // Center/Span for automatable register travel.
 }
 
 void OrchHarpAudioProcessor::renameBankSlot (int index, const juce::String& name)
@@ -1267,14 +1281,42 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
 
     lastVoicedSeen.store (static_cast<int> (group.size()));
 
-    // Per-hand range: fold / clamp / drop.
-    const int hLo = handLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handLoNoteParam->load())) : 24;
-    const int hHi = handHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handHiNoteParam->load())) : 103;
+    // Per-hand range. Min/Max mode: the note window is [handLoNote, handHiNote].
+    // Center/Span mode: it is handCenter +/- handSpan/2, and every note first
+    // octave-folds toward handCenter (the "hand travels" primitive - sweep
+    // handCenter by automation and a static rhythmic input climbs with it) then
+    // re-snaps to the live pedal diagram so the travel never leaves the strings.
+    const int rangeMode  = rangeModeParam != nullptr ? juce::jlimit (0, 1, juce::roundToInt (rangeModeParam->load())) : 0;
+    const bool centerSpan = rangeMode == 1;
     const int oor = outOfRangeParam != nullptr ? juce::jlimit (0, 2, juce::roundToInt (outOfRangeParam->load())) : 1;
+
+    int hLo, hHi, centerNote;
+    if (centerSpan)
+    {
+        centerNote   = handCenterParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handCenterParam->load())) : 60;
+        const int sp = handSpanParam   != nullptr ? juce::jlimit (2, 72,  juce::roundToInt (handSpanParam->load()))   : 44;
+        hLo = juce::jlimit (0, 127, centerNote - sp / 2);
+        hHi = juce::jlimit (0, 127, centerNote + sp / 2);
+    }
+    else
+    {
+        hLo = handLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handLoNoteParam->load())) : 24;
+        hHi = handHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (handHiNoteParam->load())) : 103;
+        centerNote = (hLo + hHi) / 2;
+    }
+
     for (auto it = group.begin(); it != group.end(); )
     {
         int n = it->outputNote;
-        if (n >= hLo && n <= hHi) { ++it; continue; }
+
+        if (centerSpan)
+        {
+            n = ohrp::foldToCenter (n, centerNote);
+            n = ohrp::nearestStringNote (n, soundingDiagram); // stay pedal-correct
+            n = ohrp::foldToCenter (n, centerNote);           // snap may have nudged an octave
+        }
+
+        if (n >= hLo && n <= hHi) { it->outputNote = juce::jlimit (0, 127, n); ++it; continue; }
 
         if (oor == 0) { swallow (*it); it = group.erase (it); continue; } // Drop
         else if (oor == 2)                                                // Clamp
@@ -1284,6 +1326,8 @@ void OrchHarpAudioProcessor::flushVoiceGroup (std::vector<ResolvedNote>& group, 
             for (int guard = 0; guard < 11 && n < hLo && n + 12 <= 127; ++guard) n += 12;
             for (int guard = 0; guard < 11 && n > hHi && n - 12 >= 0;   ++guard) n -= 12;
         }
+        if (centerSpan)
+            n = ohrp::nearestStringNote (n, soundingDiagram);
         it->outputNote = juce::jlimit (0, 127, n);
         ++it;
     }

@@ -56,7 +56,16 @@ group is filtered:
   which hand a **lone** note goes to under *Block* or *Interlock*, so a
   monophonic line lands on one instance instead of being dropped by both.
 - **Max voices** — notes kept per hand per placement (4 = a hand).
-- **Hand low / high note** + **out-of-range** — Drop / Fold an octave / Clamp.
+- **Range mode** — *Min/Max* (the hand window is **Hand low / high note**) or
+  *Center/Span* (the window is **Center note** ± **Span**/2). In Center/Span
+  every note first octave-folds toward Center, then re-snaps to the live pedal
+  diagram — so if you **automate Center note** during playback the hand travels
+  through registers, octave by octave, and never leaves the strings. Works from
+  a single repeated note: a rhythm on one pitch climbs and falls with the knob.
+  This is one harpist's hand; give the two instances their own Center automation
+  (a Random modulator at different rates) for two independent travelling hands.
+- **Hand low / high note** / **Center note / span** + **out-of-range** — Drop /
+  Fold an octave / Clamp, applied at the window edge.
 - **Max span** — the widest reach (16 semitones = a 10th). **Over-span**:
   *Drop Widest*, *Fold* an outlier in, or *Roll* (fast strum). **Roll rate**
   sets the strum spacing.

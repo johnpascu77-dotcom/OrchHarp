@@ -74,6 +74,12 @@ namespace ohrp
     // as the input): used by BlackKeyMode::Nearest.
     int nearestStringNote (int noteNumber, const Diagram& diagram) noexcept;
 
+    // Octave-shift `note` so it lands in the octave nearest `centerNote` (ties
+    // resolve downward). This is the "hand travels" primitive: sweep centerNote
+    // by automation and a static rhythmic input climbs / falls with it, octave
+    // by octave. Result stays 0..127.
+    int foldToCenter (int note, int centerNote) noexcept;
+
     // ---- Glissando engine (Phase 2) --------------------------------------
     //
     // An "absolute string index" spans the whole harp: octave = floor(s / 7),

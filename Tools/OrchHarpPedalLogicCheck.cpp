@@ -334,6 +334,15 @@ int main()
         check (spanned.front() == 0 && spanned.back() == 3,
                "span clamp with both ends protected: protect wins, ends kept");
 
+        // foldToCenter: the "hand travels" primitive.
+        checkInt (foldToCenter (60, 60), 60, "foldToCenter: already at centre is unchanged");
+        checkInt (foldToCenter (60, 84), 84, "foldToCenter: climbs to the C nearest a higher centre");
+        checkInt (foldToCenter (60, 36), 36, "foldToCenter: drops to the C nearest a lower centre");
+        checkInt (foldToCenter (62, 36), 38, "foldToCenter: keeps pitch class, nearest octave to centre");
+        checkInt (foldToCenter (60, 79), 84, "foldToCenter: nearest octave to centre, not exact");
+        check (foldToCenter (0, 127) <= 127 && foldToCenter (127, 0) >= 0,
+               "foldToCenter: stays in MIDI range at the extremes");
+
         // Board-order pedal-marker spelling for OrchCapture.
         check (harpPedalText (kAllNatural) == "D C B | E F G A",
                "harpPedalText: all-natural is board order D C B | E F G A");

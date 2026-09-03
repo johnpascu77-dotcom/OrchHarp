@@ -682,15 +682,30 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     maxVoicesAttachment = std::make_unique<SliderAttachment> (params, "maxVoices", maxVoicesSlider);
     onsetWindowAttachment = std::make_unique<SliderAttachment> (params, "onsetWindowMs", onsetWindowSlider);
 
-    voicingRangeLabel.setText ("Hand low / high note", juce::dontSendNotification);
+    voicingRangeLabel.setText ("Range: mode / low / high note", juce::dontSendNotification);
     styleLabel (voicingRangeLabel, 12.0f);
     addAndMakeVisible (voicingRangeLabel);
+    rangeModeBox.addItemList ({ "Min/Max", "Center/Span" }, 1);
+    styleBox (rangeModeBox);
+    addAndMakeVisible (rangeModeBox);
+    rangeModeAttachment = std::make_unique<ComboBoxAttachment> (params, "rangeMode", rangeModeBox);
     initNoteIncDec (handLoNoteSlider);
     initNoteIncDec (handHiNoteSlider);
     addAndMakeVisible (handLoNoteSlider);
     addAndMakeVisible (handHiNoteSlider);
     handLoNoteAttachment = std::make_unique<SliderAttachment> (params, "handLoNote", handLoNoteSlider);
     handHiNoteAttachment = std::make_unique<SliderAttachment> (params, "handHiNote", handHiNoteSlider);
+
+    voicingCenterLabel.setText ("Center note / span (automate center to travel)", juce::dontSendNotification);
+    styleLabel (voicingCenterLabel, 12.0f);
+    addAndMakeVisible (voicingCenterLabel);
+    initNoteIncDec (handCenterSlider);
+    initIncDec (handSpanSlider, 2, 72);
+    addAndMakeVisible (handCenterSlider);
+    addAndMakeVisible (handSpanSlider);
+    handCenterAttachment = std::make_unique<SliderAttachment> (params, "handCenter", handCenterSlider);
+    handSpanAttachment = std::make_unique<SliderAttachment> (params, "handSpan", handSpanSlider);
+
     outOfRangeBox.addItemList ({ "Drop", "Fold Octave", "Clamp" }, 1);
     styleBox (outOfRangeBox);
     addAndMakeVisible (outOfRangeBox);
@@ -761,7 +776,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
         &voicingHandLabel, &handBox, &splitModeBox,
         &voicingSplitLabel, &splitNoteSlider, &splitChanLeftSlider, &splitChanRightSlider,
         &voicingCapLabel, &maxVoicesSlider, &onsetWindowSlider,
-        &voicingRangeLabel, &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox,
+        &voicingRangeLabel, &rangeModeBox, &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox,
+        &voicingCenterLabel, &handCenterSlider, &handSpanSlider,
         &voicingSpanLabel, &maxSpanSlider, &overSpanBox, &rollRateBox,
         &voicingProtectLabel, &protectBox, &outChannelSlider });
 
@@ -784,8 +800,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     // Size last, so the first resized() runs with the tabs + all children in
     // place (the tab content panels lay out from resized()).
     setResizable (true, true);
-    setResizeLimits (800, 620, 1240, 1000);
-    setSize (900, 760);
+    setResizeLimits (800, 640, 1240, 1000);
+    setSize (900, 790);
 
     startTimerHz (12);
 }
@@ -1074,11 +1090,21 @@ void OrchHarpAudioProcessorEditor::layoutVoicingTab()
     {
         auto row = area.removeFromTop (26);
         voicingRangeLabel.setBounds (row.removeFromLeft (lblW));
+        rangeModeBox.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (8);
         handLoNoteSlider.setBounds (row.removeFromLeft (fld));
         row.removeFromLeft (8);
         handHiNoteSlider.setBounds (row.removeFromLeft (fld));
         row.removeFromLeft (10);
         outOfRangeBox.setBounds (row.removeFromLeft (110));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        voicingCenterLabel.setBounds (row.removeFromLeft (lblW));
+        handCenterSlider.setBounds (row.removeFromLeft (fld));
+        row.removeFromLeft (8);
+        handSpanSlider.setBounds (row.removeFromLeft (fld));
     }
     area.removeFromTop (10);
     {
@@ -1137,13 +1163,19 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     const bool chanSplit = splitModeVal >= 2.5f;                       // Channel
     const bool pitchSplit = splitModeVal >= 0.5f && splitModeVal < 2.5f; // Block / Interlock
     const bool rolling = audioProcessor.getParameters().getRawParameterValue ("overSpan")->load() >= 1.5f;
+    const bool centerSpan = audioProcessor.getParameters().getRawParameterValue ("rangeMode")->load() >= 0.5f;
     for (juce::Component* c : std::initializer_list<juce::Component*> {
              &leftHandPresetButton, &rightHandPresetButton, &dampSuccessiveButton,
-             &handBox, &splitModeBox, &maxVoicesSlider, &onsetWindowSlider,
-             &handLoNoteSlider, &handHiNoteSlider, &outOfRangeBox, &maxSpanSlider,
+             &handBox, &splitModeBox, &rangeModeBox, &maxVoicesSlider, &onsetWindowSlider,
+             &outOfRangeBox, &maxSpanSlider,
              &overSpanBox, &protectBox,
              &voicingHandLabel, &voicingCapLabel, &voicingRangeLabel, &voicingSpanLabel, &voicingProtectLabel })
         c->setEnabled (voicing);
+    handLoNoteSlider.setEnabled (voicing && ! centerSpan);
+    handHiNoteSlider.setEnabled (voicing && ! centerSpan);
+    handCenterSlider.setEnabled (voicing && centerSpan);
+    handSpanSlider.setEnabled (voicing && centerSpan);
+    voicingCenterLabel.setEnabled (voicing && centerSpan);
     // Output channel also tags the glissando engines, so it stays live even
     // with voicing off (a two-instance gliss rig with no chord reduction).
     outChannelSlider.setEnabled (true);
