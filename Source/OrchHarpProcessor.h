@@ -112,6 +112,10 @@ private:
     std::atomic<float>* glissRunHiNoteParam = nullptr;
     std::atomic<float>* glissRunDirectionParam = nullptr;
     std::atomic<float>* glissRunDurationParam = nullptr;
+    std::atomic<float>* bisbLoNoteParam = nullptr;
+    std::atomic<float>* bisbHiNoteParam = nullptr;
+    std::atomic<float>* bisbRateParam = nullptr;
+    std::atomic<float>* bisbEnharmonicParam = nullptr;
 
     std::atomic<float>* pitchModeParam = nullptr;
     std::atomic<float>* contourStepParam = nullptr;
@@ -230,6 +234,24 @@ private:
     std::vector<PendingGlissEvent> pendingGliss; // sorted by ppq
     int runLastNote = -1;                // Monophonic trigger-run: last emitted note
 
+    // ---- Bisbigliando ----
+    // A note in the bisb zone is consumed and re-emitted as a measured tremolo
+    // (a rustling repeat, optionally rocking to an enharmonic neighbour string)
+    // until its note-off. A "Bisbigliando" marker is logged to the sidecar.
+    struct BisbVoice
+    {
+        int channel = 1;
+        int inputNote = 0;
+        int noteA = -1;
+        int noteB = -1;
+        int cur = -1;           // the pitch currently sounding
+        juce::uint8 velocity = 96;
+        double nextPpq = 0.0;
+        bool onB = false;
+        bool sounding = false;
+    };
+    std::vector<BisbVoice> bisbVoices;
+
     // ---- Readouts ----
     std::atomic<int> lastInputNote { -1 };
     std::atomic<int> lastOutputNote { -1 };
@@ -262,6 +284,13 @@ private:
                             double ppqPerSample, int numSamples);
     void releaseIdleGlissNotes (juce::MidiBuffer& output, int samplePosition);
     void flushGlissNotes (juce::MidiBuffer& output, int samplePosition);
+
+    bool tryStartBisb (int noteNumber, int channel, juce::uint8 velocity, double eventPpq);
+    bool stopBisb (int channel, int noteNumber, juce::MidiBuffer& output, int samplePosition);
+    void drainBisb (juce::MidiBuffer& output, double blockStartPpq, double blockEndPpq,
+                    double ppqPerSample, int numSamples);
+    void flushBisb (juce::MidiBuffer& output, int samplePosition);
+    double bisbRateInBeats() const;
 
     // The pitch transform for one note-on, with side effects (trigger scheduling,
     // re-pedal, nudge, contour state) but NO emission.

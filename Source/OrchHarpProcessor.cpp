@@ -104,6 +104,10 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     glissTrigHiParam       = parameters.getRawParameterValue ("glissTrigHi");
     glissRunLoNoteParam    = parameters.getRawParameterValue ("glissRunLoNote");
     glissRunHiNoteParam    = parameters.getRawParameterValue ("glissRunHiNote");
+    bisbLoNoteParam        = parameters.getRawParameterValue ("bisbLoNote");
+    bisbHiNoteParam        = parameters.getRawParameterValue ("bisbHiNote");
+    bisbRateParam          = parameters.getRawParameterValue ("bisbRate");
+    bisbEnharmonicParam    = parameters.getRawParameterValue ("bisbEnharmonic");
     glissRunDirectionParam = parameters.getRawParameterValue ("glissRunDirection");
     glissRunDurationParam  = parameters.getRawParameterValue ("glissRunDuration");
 
@@ -280,6 +284,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "glissRunDuration", 1 }, "Gliss Run Duration",
         juce::StringArray { "1/16", "1/8", "1/4", "1/2", "1 bar" }, 2));
+
+    // ---- Bisbigliando (Phase 2c) --------------------------------------
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "bisbLoNote", 1 }, "Bisb Low Note (0/0 = off)", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "bisbHiNote", 1 }, "Bisb High Note", 0, 127, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "bisbRate", 1 }, "Bisb Rate",
+        juce::StringArray { "1/16", "1/16T", "1/32", "1/32T", "1/64" }, 2));
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "bisbEnharmonic", 1 }, "Bisb Enharmonic Rock", false));
 
     // ---- Contour mode (Phase 3) -----------------------------------------
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
@@ -558,6 +573,99 @@ int OrchHarpAudioProcessor::glissWindowHiIndex (bool trigger) const
     return juce::jmax (a, b);
 }
 
+// ---- Bisbigliando --------------------------------------------------
+
+double OrchHarpAudioProcessor::bisbRateInBeats() const
+{
+    // 1/16, 1/16T, 1/32, 1/32T, 1/64 in quarter-note beats.
+    static const std::array<double, 5> beats { 0.25, 1.0 / 6.0, 0.125, 1.0 / 12.0, 0.0625 };
+    const int idx = bisbRateParam != nullptr ? juce::jlimit (0, 4, juce::roundToInt (bisbRateParam->load())) : 2;
+    return beats[static_cast<size_t> (idx)];
+}
+
+bool OrchHarpAudioProcessor::tryStartBisb (int noteNumber, int channel, juce::uint8 velocity, double eventPpq)
+{
+    const int lo = bisbLoNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbLoNoteParam->load())) : 0;
+    const int hi = bisbHiNoteParam != nullptr ? juce::jlimit (0, 127, juce::roundToInt (bisbHiNoteParam->load())) : 0;
+    if (lo == 0 && hi == 0)
+        return false;
+    const int zLo = juce::jmin (lo, hi);
+    const int zHi = juce::jmax (lo, hi);
+    if (noteNumber < zLo || noteNumber > zHi)
+        return false;
+
+    const int noteA = ohrp::whiteKeyToStringNote (noteNumber, soundingDiagram);
+    int noteB = noteA;
+    const bool rock = bisbEnharmonicParam != nullptr && bisbEnharmonicParam->load() >= 0.5f;
+    if (rock)
+        for (int d = 1; d <= 3 && noteB == noteA; ++d)
+            for (int s : { noteA + d, noteA - d })
+                if (s >= 0 && s <= 127 && ohrp::nearestStringNote (s, soundingDiagram) == s)
+                    { noteB = s; break; }
+
+    BisbVoice v;
+    v.channel = juce::jlimit (1, 16, channel);
+    v.inputNote = noteNumber;
+    v.noteA = noteA;
+    v.noteB = noteB;
+    v.velocity = static_cast<juce::uint8> (juce::jmax (1, static_cast<int> (velocity)));
+    v.nextPpq = eventPpq;
+    bisbVoices.push_back (v);
+
+    const juce::ScopedLock sl (pedalMarkerLock);
+    if (pedalMarkerLog.size() < 4096)
+        pedalMarkerLog.emplace_back (juce::jmax (0.0, eventPpq), juce::String ("Bisbigliando"));
+    return true;
+}
+
+bool OrchHarpAudioProcessor::stopBisb (int channel, int noteNumber, juce::MidiBuffer& output, int samplePosition)
+{
+    const int ch = juce::jlimit (1, 16, channel);
+    for (auto it = bisbVoices.begin(); it != bisbVoices.end(); ++it)
+    {
+        if (it->channel != ch || it->inputNote != noteNumber)
+            continue;
+        if (it->sounding && it->cur >= 0)
+            output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, it->cur), samplePosition);
+        bisbVoices.erase (it);
+        return true;
+    }
+    return false;
+}
+
+void OrchHarpAudioProcessor::drainBisb (juce::MidiBuffer& output, double blockStartPpq, double blockEndPpq,
+                                        double ppqPerSample, int numSamples)
+{
+    if (bisbVoices.empty() || ppqPerSample <= 0.0)
+        return;
+    const double rate = juce::jmax (1.0e-4, bisbRateInBeats());
+
+    for (auto& v : bisbVoices)
+    {
+        int guard = 0;
+        while (v.nextPpq < blockEndPpq && guard++ < 512)
+        {
+            const int sp = juce::jlimit (0, juce::jmax (0, numSamples - 1),
+                                         juce::roundToInt ((v.nextPpq - blockStartPpq) / ppqPerSample));
+            if (v.sounding && v.cur >= 0)
+                output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, v.cur), sp);
+            v.cur = v.onB ? v.noteB : v.noteA;
+            output.addEvent (juce::MidiMessage::noteOn (glissEmitChannel, v.cur, v.velocity), sp);
+            v.sounding = true;
+            v.onB = ! v.onB;
+            v.nextPpq += rate;
+        }
+    }
+}
+
+void OrchHarpAudioProcessor::flushBisb (juce::MidiBuffer& output, int samplePosition)
+{
+    for (auto& v : bisbVoices)
+        if (v.sounding && v.cur >= 0)
+            output.addEvent (juce::MidiMessage::noteOff (glissEmitChannel, v.cur), samplePosition);
+    bisbVoices.clear();
+}
+
 ohrp::Diagram OrchHarpAudioProcessor::getSoundingDiagramForUi() const
 {
     ohrp::Diagram d = ohrp::kAllNatural;
@@ -671,6 +779,7 @@ void OrchHarpAudioProcessor::resetNoteMap()
     glissIdleBeats = 0.0;
     lastGlissNoteUi.store (-1);
     glissActiveCountUi.store (0);
+    bisbVoices.clear();
 
     currentGroup.clear();
     currentGroupStartSample = 0;
@@ -1051,6 +1160,14 @@ OrchHarpAudioProcessor::resolveNoteOn (const juce::MidiMessage& message, int sam
     {
         r.consumed = true;
         r.action = 5;
+        return r;
+    }
+
+    // Bisbigliando: a note in the zone is consumed and rustles as a tremolo.
+    if (tryStartBisb (inputNote, r.channel, r.velocity, eventPpq))
+    {
+        r.consumed = true;
+        r.action = 7;
         return r;
     }
 
@@ -1513,9 +1630,10 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     const bool chromatic = modeParam != nullptr && modeParam->load() >= 0.5f;
     if (chromatic)
     {
-        // Release any ringing gliss notes into the untouched stream before we
-        // bow out, so nothing hangs.
+        // Release any ringing gliss / bisb notes into the untouched stream
+        // before we bow out, so nothing hangs.
         flushGlissNotes (midiMessages, 0);
+        flushBisb (midiMessages, 0);
         currentGroup.clear();
         if (! activeNotes.empty())
             resetNoteMap();
@@ -1551,6 +1669,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         if (wasPlaying)
         {
             flushGlissNotes (output, 0); // transport stop: damp everything
+            flushBisb (output, 0);
             currentGroup.clear();        // drop any half-built group (never sounded)
             lastContourInput = -1;       // and start the next phrase fresh
             contourStackDepth = 0;
@@ -1635,6 +1754,9 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (message.isNoteOff())
         {
+            if (stopBisb (message.getChannel(), message.getNoteNumber(), output, samplePosition))
+                continue; // the trigger note ran a bisbigliando; its note-off ends it
+
             // A note-off means the chord that was building is being released -
             // close the group so its note-ons are tracked before we pair.
             if (voicing && ! currentGroup.empty())
@@ -1649,6 +1771,7 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         if (message.isAllNotesOff() || message.isAllSoundOff())
         {
             flushGlissNotes (output, samplePosition);
+            flushBisb (output, samplePosition);
             resetNoteMap(); // drops any buffered group - the panic kills everything
             output.addEvent (message, samplePosition);
             continue;
@@ -1668,6 +1791,9 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     // Emit any scheduled trigger-run notes that fall in this block.
     drainPendingGliss (output, blockStartPpq, blockEndPpq, ppqPerSample, numSamples);
+
+    // Advance any active bisbigliando tremolos.
+    drainBisb (output, blockStartPpq, blockEndPpq, ppqPerSample, numSamples);
 
     // Release a held contour note once the CC has been still long enough
     // (so the last note of a run gets a real duration for notation).

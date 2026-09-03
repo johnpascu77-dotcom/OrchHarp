@@ -598,6 +598,28 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     addAndMakeVisible (glissRunDurationBox);
     glissRunDurationAttachment = std::make_unique<ComboBoxAttachment> (params, "glissRunDuration", glissRunDurationBox);
 
+    // ---- Bisbigliando (Motion tab) -----------------------------------
+    bisbLabel.setText ("Bisbigliando", juce::dontSendNotification);
+    styleLabel (bisbLabel, 13.0f, true);
+    addAndMakeVisible (bisbLabel);
+    bisbZoneLabel.setText ("Zone lo / hi / rate  (0/0 = off; note in zone rustles)", juce::dontSendNotification);
+    styleLabel (bisbZoneLabel, 12.0f);
+    addAndMakeVisible (bisbZoneLabel);
+    initNoteIncDec (bisbLoNoteSlider);
+    initNoteIncDec (bisbHiNoteSlider);
+    addAndMakeVisible (bisbLoNoteSlider);
+    addAndMakeVisible (bisbHiNoteSlider);
+    bisbLoNoteAttachment = std::make_unique<SliderAttachment> (params, "bisbLoNote", bisbLoNoteSlider);
+    bisbHiNoteAttachment = std::make_unique<SliderAttachment> (params, "bisbHiNote", bisbHiNoteSlider);
+    bisbRateBox.addItemList ({ "1/16", "1/16T", "1/32", "1/32T", "1/64" }, 1);
+    styleBox (bisbRateBox);
+    addAndMakeVisible (bisbRateBox);
+    bisbRateAttachment = std::make_unique<ComboBoxAttachment> (params, "bisbRate", bisbRateBox);
+    bisbEnharmonicButton.setButtonText ("Enharmonic rock");
+    bisbEnharmonicButton.setColour (juce::ToggleButton::textColourId, juce::Colours::white);
+    addAndMakeVisible (bisbEnharmonicButton);
+    bisbEnharmonicAttachment = std::make_unique<ButtonAttachment> (params, "bisbEnharmonic", bisbEnharmonicButton);
+
     // ---- Contour mode (Harp tab) --------------------------------------
     contourLabel.setText ("Contour", juce::dontSendNotification);
     styleLabel (contourLabel, 13.0f, true);
@@ -792,7 +814,9 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
         &glissVelocitySlider, &glissRingBox, &glissReleaseBox,
         &triggerGlissLabel, &glissTrigZoneLabel, &glissTrigLoSlider, &glissTrigHiSlider,
         &glissRunWindowLabel, &glissRunLoNoteSlider, &glissRunHiNoteSlider,
-        &glissRunDirLabel, &glissRunDirectionBox, &glissRunDurationBox });
+        &glissRunDirLabel, &glissRunDirectionBox, &glissRunDurationBox,
+        &bisbLabel, &bisbZoneLabel, &bisbLoNoteSlider, &bisbHiNoteSlider,
+        &bisbRateBox, &bisbEnharmonicButton });
 
     refreshBankCells();
     updateStatus();
@@ -800,8 +824,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     // Size last, so the first resized() runs with the tabs + all children in
     // place (the tab content panels lay out from resized()).
     setResizable (true, true);
-    setResizeLimits (800, 640, 1240, 1000);
-    setSize (900, 790);
+    setResizeLimits (800, 660, 1240, 1040);
+    setSize (920, 830);
 
     startTimerHz (12);
 }
@@ -1041,6 +1065,20 @@ void OrchHarpAudioProcessorEditor::layoutMotionTab()
         row.removeFromLeft (8);
         glissRunDurationBox.setBounds (row.removeFromLeft (100));
     }
+    area.removeFromTop (12);
+
+    bisbLabel.setBounds (area.removeFromTop (18));
+    {
+        auto row = area.removeFromTop (26);
+        bisbZoneLabel.setBounds (row.removeFromLeft (lblW));
+        bisbLoNoteSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (8);
+        bisbHiNoteSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (12);
+        bisbRateBox.setBounds (row.removeFromLeft (88));
+        row.removeFromLeft (10);
+        bisbEnharmonicButton.setBounds (row.removeFromLeft (140));
+    }
 }
 
 void OrchHarpAudioProcessorEditor::layoutVoicingTab()
@@ -1149,6 +1187,10 @@ void OrchHarpAudioProcessorEditor::timerCallback()
     glissReleaseBox.setEnabled (pedalMode);
     glissRunDirectionBox.setEnabled (pedalMode);
     glissRunDurationBox.setEnabled (pedalMode);
+    for (auto* c : { &bisbLoNoteSlider, &bisbHiNoteSlider })
+        c->setEnabled (pedalMode);
+    bisbRateBox.setEnabled (pedalMode);
+    bisbEnharmonicButton.setEnabled (pedalMode);
 
     // Contour controls only matter in Contour pitch mode.
     const bool contour = audioProcessor.getParameters().getRawParameterValue ("pitchMode")->load() >= 0.5f;
@@ -1201,7 +1243,9 @@ void OrchHarpAudioProcessorEditor::updateStatus()
     if (in >= 0)
     {
         text << "In " << noteName (in) << " -> ";
-        if (out < 0 || action == 3)
+        if (action == 7)
+            text << "(bisbigliando)";
+        else if (out < 0 || action == 3)
             text << "(dropped)";
         else if (action == 4)
             text << "(control)";

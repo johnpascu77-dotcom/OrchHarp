@@ -289,7 +289,8 @@ The trigger note's pitch is irrelevant; it just fires.
   a **separate** window from the Contour engine's.
 - **Run direction** — Up (from the low note), Down (from the high note),
   Up-Down, Down-Up.
-- **Run duration** — total length, tempo-synced (1/16 … 1 bar, 4/4 assumed).
+- **Run duration** — total length, tempo-synced (1/16 … 1 bar; "1 bar" follows
+  the host time signature).
 - **Note velocity scales the reach** — a soft trigger note runs a short way in
   from the start end; full velocity runs the whole window.
 
@@ -299,3 +300,19 @@ Ring / Monophonic and Release are shared with the Contour engine.
 So for a big descending gliss: **Run low note** = the bottom, **Run high note**
 = the top, **Run direction = Down**, and hit the trigger note hard for the full
 span. No base-octave guessing — the two notes say exactly where it runs.
+
+## Bisbigliando
+
+The harp "whisper" — a fast measured tremolo on one pitch. Hold a note in the
+bisb zone and it rustles until you release it; a **Bisbigliando** marker goes to
+the score.
+
+- **Bisb zone lo / hi** — the trigger range. **0 / 0 = off.** Keep it clear of
+  the harp's playing range (e.g. MIDI 16–19).
+- **Bisb rate** — the tremolo subdivision (1/16 … 1/64, straight or triplet),
+  tempo-synced.
+- **Enharmonic rock** — off: repeats the one note (the standard tremolo Dorico
+  engraves). On: rocks between that string and its nearest neighbour within a
+  few semitones, for the real doubled-pedal shimmer when the diagram has one.
+
+Notes ride the diagram and the **Output channel** tag like the gliss engines.

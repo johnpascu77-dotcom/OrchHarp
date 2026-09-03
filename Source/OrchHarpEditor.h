@@ -120,6 +120,11 @@ private:
     juce::Slider glissTrigLoSlider, glissTrigHiSlider, glissRunLoNoteSlider, glissRunHiNoteSlider;
     juce::ComboBox glissRunDirectionBox, glissRunDurationBox;
 
+    juce::Label bisbLabel, bisbZoneLabel;
+    juce::Slider bisbLoNoteSlider, bisbHiNoteSlider;
+    juce::ComboBox bisbRateBox;
+    juce::ToggleButton bisbEnharmonicButton;
+
     // ---- Contour (Harp tab) ----
     juce::Label contourLabel, contourStepLabel, contourWinLabel;
     juce::ComboBox pitchModeBox, contourStepBox, contourChordsBox;
@@ -149,6 +154,9 @@ private:
     std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment;
     std::unique_ptr<SliderAttachment> glissTrigLoAttachment, glissTrigHiAttachment, glissRunLoNoteAttachment, glissRunHiNoteAttachment;
     std::unique_ptr<ComboBoxAttachment> glissRingAttachment, glissReleaseAttachment, glissRunDirectionAttachment, glissRunDurationAttachment;
+    std::unique_ptr<SliderAttachment> bisbLoNoteAttachment, bisbHiNoteAttachment;
+    std::unique_ptr<ComboBoxAttachment> bisbRateAttachment;
+    std::unique_ptr<ButtonAttachment> bisbEnharmonicAttachment;
 
     std::unique_ptr<ComboBoxAttachment> pitchModeAttachment, contourStepAttachment, contourChordsAttachment;
     std::unique_ptr<SliderAttachment> contourLoNoteAttachment, contourHiNoteAttachment;
