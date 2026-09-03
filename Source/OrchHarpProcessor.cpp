@@ -88,6 +88,8 @@ OrchHarpAudioProcessor::OrchHarpAudioProcessor()
     avoidRingingParam    = parameters.getRawParameterValue ("avoidRingingPedalChange");
     ccBankSelectParam    = parameters.getRawParameterValue ("ccBankSelect");
     ccChannelParam       = parameters.getRawParameterValue ("ccChannel");
+    fieldCcParam         = parameters.getRawParameterValue ("fieldCc");
+    fieldChannelParam    = parameters.getRawParameterValue ("fieldChannel");
     ctrlDirectLoParam    = parameters.getRawParameterValue ("ctrlDirectLo");
     ctrlDirectHiParam    = parameters.getRawParameterValue ("ctrlDirectHi");
     ctrlStepDownParam    = parameters.getRawParameterValue ("ctrlStepDownNote");
@@ -233,6 +235,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchHarpAudioProcessor::crea
         juce::ParameterID { "ccBankSelect", 1 }, "CC# Bank Select (0 = off)", 0, 127, 49));
     params.push_back (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { "ccChannel", 1 }, "CC Channel (0 = any)", 0, 16, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "fieldCc", 1 }, "Pitch-Field CC# base (0 = off; MC broadcast)", 0, 118, 0));
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "fieldChannel", 1 }, "Pitch-Field CC Channel (0 = any)", 0, 16, 0));
 
     // Black-key control zone. Defaults: direct-select C-1..B-1 (MIDI 0..11),
     // step down/up MIDI 12/13 - all below any folded harp playing range
@@ -868,6 +874,41 @@ void OrchHarpAudioProcessor::handleControlCc (const juce::MidiMessage& message)
     const int slot = juce::roundToInt (value / 127.0f * (kNumBankSlots - 1));
     recallBankSlot (juce::jlimit (0, kNumBankSlots - 1, slot));
     lastCc.store (ccNum);
+}
+
+bool OrchHarpAudioProcessor::handleFieldCc (const juce::MidiMessage& message)
+{
+    const int base = fieldCcParam != nullptr ? juce::jlimit (0, 118, juce::roundToInt (fieldCcParam->load())) : 0;
+    if (base == 0)
+        return false;
+
+    const int wantCh = fieldChannelParam != nullptr ? juce::jlimit (0, 16, juce::roundToInt (fieldChannelParam->load())) : 0;
+    if (wantCh != 0 && message.getChannel() != wantCh)
+        return false;
+
+    const int cc = message.getControllerNumber();
+    if (cc == base)          fieldMaskLo = message.getControllerValue() & 0x7F;
+    else if (cc == base + 1) fieldMaskHi = message.getControllerValue() & 0x1F;
+    else                     return false;
+
+    lastCc.store (cc);
+
+    if (fieldMaskLo < 0 || fieldMaskHi < 0)
+        return true; // wait for both halves
+
+    const int mask = fieldMaskLo | (fieldMaskHi << 7);
+    if (mask == 0 || mask == lastFieldMask)
+        return true;
+    lastFieldMask = mask;
+
+    std::vector<int> pcs;
+    for (int pc = 0; pc < 12; ++pc)
+        if (mask & (1 << pc))
+            pcs.push_back (pc);
+
+    // The governor takes it from here (requested -> sounding, one foot per move).
+    applyDiagramToParams (ohrp::bestFitDiagram (pcs));
+    return true;
 }
 
 bool OrchHarpAudioProcessor::tryConsumeControlNote (int noteNumber)
@@ -1725,6 +1766,8 @@ void OrchHarpAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
             if (channelOk)
                 handleControlCc (message);
 
+            handleFieldCc (message); // its own channel filter; passes through for a parallel ONF
+
             output.addEvent (message, samplePosition); // control CCs pass through
             continue;
         }
@@ -1851,6 +1894,7 @@ void OrchHarpAudioProcessor::setStateInformation (const void* data, int sizeInBy
 
     resetNoteMap();
     lastAppliedBankSlot = -1;
+    fieldMaskLo = fieldMaskHi = lastFieldMask = -1;
     soundingDiagram = readRequestedDiagram();
     moveInfo = {};
     storeReadoutDiagrams (soundingDiagram);

@@ -249,11 +249,17 @@ The 7 pedal controls, the bank grid, the family/variant helper, a live
 harp-pedal-diagram readout showing **sounding vs requested** (pedals still in
 transit highlighted), and the governor controls.
 
-### MC broadcast of an exact diagram — noted, not Phase 1
+### MC pitch-field broadcast → best-fit pedals — BUILT 2026-09-03
 
-ONF broadcasts its 12-pc mask over 2 CCs. OrchHarp could take a diagram (7 trits
-≈ 12 bits) the same way over 2 CCs from `ccMaskBase`. Deferred; CC49→slot covers
-the arc-driven case.
+OrchHarp listens to **Composer Mastermind's existing 2-CC pitch-class field
+broadcast** (the same one OrchNoteFilter reassembles — `baseCc` low 7 bits,
+`baseCc+1` high 5 bits, MC default base 110 / channel 1). `fieldCc` (0 = off) +
+`fieldChannel` (0 = any) params; `handleFieldCc` reassembles the 12-bit mask and
+runs `ohrp::bestFitDiagram` on the pitch-class set → `applyDiagramToParams`; the
+governor then moves the pedals one foot at a time. No new protocol and no MC
+change — MC's arc/section content *is* the pitch field, so form drives the
+pedals. CCs pass through for a parallel ONF. Distinct from Phase 2b (which is the
+after-the-fact marker of whatever diagram ends up sounding).
 
 ---
 
@@ -353,7 +359,8 @@ OrchCapture. Revisit only if that proves painful. Not building it for now.
 | **2b — notation** ✅ | Pedal-change markers → OrchCapture. Built 2026-09-03 via a temp-file sidecar: on transport stop OrchHarp writes the take's requested-diagram changes as `bar:label` lines to `%TEMP%/orchharp-pedals-<tag>.txt` (off the audio thread, `MarkerWriter` juce::Thread); OrchCapture's `buildMergedExportOptions` folds fresh files into its section markers, de-duplicating. Board-order spelling from `ohrp::harpPedalText`. Time-signature-aware bar math both sides (constant-meter assumption). |
 | **2c — bisbigliando** ✅ | A note in the `bisbLoNote..bisbHiNote` zone (0/0 = off) is consumed and re-emitted as a measured tremolo (`bisbRate` 1/16..1/64 ±triplet) until its note-off; `bisbEnharmonic` rocks to the nearest neighbour string. `BisbVoice` list, `drainBisb`/`stopBisb`/`flushBisb`, notes on `glissEmitChannel`. A "Bisbigliando" marker logs to the sidecar. Built 2026-09-03. |
 | **3 — voicing + contour** ✅ | Function-weighted voicing (Hand L/R, poly cap, span→Roll, deterministic split, protect melody/bass, `outChannel` tag → Dorico voices) + Contour pitch mode (re-quantise a melody's shape to the diagram's degrees). Built 2026-09-02. See §12. |
-| **later** | MC 2-CC diagram broadcast (live diagram *control* from Composer Mastermind, distinct from 2b's after-the-fact markers); diagram drift + seed; harmonics tag; ~~humanize~~ (dropped — quantized out by the notation path). |
+| **2d — MC field → pedals** ✅ | OrchHarp reassembles MC's existing 2-CC pitch-class field broadcast (`fieldCc`/`fieldChannel`) and `bestFitDiagram`s it onto the pedals (governed). No MC change. Built 2026-09-03. See §7. |
+| **later** | diagram drift + seed (arc-tied); harmonics tag; ~~humanize~~ (dropped — quantized out by the notation path); ~~MC 2-CC diagram broadcast~~ (done as 2d via the existing field broadcast). |
 
 ## 11. Build
 

@@ -501,6 +501,16 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     addAndMakeVisible (ccChannelSlider);
     ccChannelAttachment = std::make_unique<SliderAttachment> (params, "ccChannel", ccChannelSlider);
 
+    fieldCcLabel.setText ("Pitch-field CC base / ch  (0=off; MC broadcast -> best-fit pedals)", juce::dontSendNotification);
+    styleLabel (fieldCcLabel, 12.0f);
+    addAndMakeVisible (fieldCcLabel);
+    initIncDec (fieldCcSlider, 0, 118);
+    initIncDec (fieldChannelSlider, 0, 16);
+    addAndMakeVisible (fieldCcSlider);
+    addAndMakeVisible (fieldChannelSlider);
+    fieldCcAttachment = std::make_unique<SliderAttachment> (params, "fieldCc", fieldCcSlider);
+    fieldChannelAttachment = std::make_unique<SliderAttachment> (params, "fieldChannel", fieldChannelSlider);
+
     ctrlDirectLabel.setText ("Ctrl direct-select note range", juce::dontSendNotification);
     styleLabel (ctrlDirectLabel, 12.0f);
     addAndMakeVisible (ctrlDirectLabel);
@@ -807,6 +817,7 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
         &governorLabel, &playabilityButton, &minChangeIntervalBox,
         &changesAtRestsOnlyButton, &avoidRingingButton,
         &triggersLabel, &ccBankLabel, &ccBankSlider, &ccChannelLabel, &ccChannelSlider,
+        &fieldCcLabel, &fieldCcSlider, &fieldChannelSlider,
         &ctrlDirectLabel, &ctrlDirectLoSlider, &ctrlDirectHiSlider,
         &ctrlStepLabel, &ctrlStepDownSlider, &ctrlStepUpSlider,
         &contourGlissLabel, &glissCcLabel, &glissCcSlider, &glissNoteRangeLabel,
@@ -824,8 +835,8 @@ OrchHarpAudioProcessorEditor::OrchHarpAudioProcessorEditor (OrchHarpAudioProcess
     // Size last, so the first resized() runs with the tabs + all children in
     // place (the tab content panels lay out from resized()).
     setResizable (true, true);
-    setResizeLimits (800, 660, 1240, 1040);
-    setSize (920, 830);
+    setResizeLimits (800, 680, 1240, 1060);
+    setSize (920, 864);
 
     startTimerHz (12);
 }
@@ -994,6 +1005,14 @@ void OrchHarpAudioProcessorEditor::layoutMotionTab()
         row.removeFromLeft (16);
         ccChannelLabel.setBounds (row.removeFromLeft (120));
         ccChannelSlider.setBounds (row.removeFromLeft (noteW));
+    }
+    area.removeFromTop (4);
+    {
+        auto row = area.removeFromTop (26);
+        fieldCcLabel.setBounds (row.removeFromLeft (lblW + 120));
+        fieldCcSlider.setBounds (row.removeFromLeft (noteW));
+        row.removeFromLeft (8);
+        fieldChannelSlider.setBounds (row.removeFromLeft (noteW));
     }
     area.removeFromTop (4);
     {

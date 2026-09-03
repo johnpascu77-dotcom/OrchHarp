@@ -94,6 +94,8 @@ private:
     std::atomic<float>* avoidRingingParam = nullptr;
     std::atomic<float>* ccBankSelectParam = nullptr;
     std::atomic<float>* ccChannelParam = nullptr;
+    std::atomic<float>* fieldCcParam = nullptr;
+    std::atomic<float>* fieldChannelParam = nullptr;
     std::atomic<float>* ctrlDirectLoParam = nullptr;
     std::atomic<float>* ctrlDirectHiParam = nullptr;
     std::atomic<float>* ctrlStepDownParam = nullptr;
@@ -276,6 +278,11 @@ private:
     void runGovernor (const ohrp::Diagram& requested, double blockBeats);
 
     void handleControlCc (const juce::MidiMessage& message);
+    // MC's 2-CC pitch-class field broadcast -> best-fit pedal diagram (governed).
+    bool handleFieldCc (const juce::MidiMessage& message);
+    int fieldMaskLo = -1;
+    int fieldMaskHi = -1;
+    int lastFieldMask = -1;
     bool tryConsumeControlNote (int noteNumber); // true if consumed as a control-zone note
     // Contour-follower CC -> gliss notes. Returns true if the CC was consumed.
     bool handleGlissCc (const juce::MidiMessage& message, int samplePosition, juce::MidiBuffer& output);

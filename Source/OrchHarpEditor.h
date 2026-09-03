@@ -105,8 +105,8 @@ private:
     juce::ToggleButton changesAtRestsOnlyButton, avoidRingingButton;
 
     juce::Label triggersLabel;
-    juce::Label ccBankLabel, ccChannelLabel, ctrlDirectLabel, ctrlStepLabel;
-    juce::Slider ccBankSlider, ccChannelSlider;
+    juce::Label ccBankLabel, ccChannelLabel, fieldCcLabel, ctrlDirectLabel, ctrlStepLabel;
+    juce::Slider ccBankSlider, ccChannelSlider, fieldCcSlider, fieldChannelSlider;
     juce::Slider ctrlDirectLoSlider, ctrlDirectHiSlider, ctrlStepDownSlider, ctrlStepUpSlider;
 
     juce::Label contourGlissLabel;
@@ -148,7 +148,7 @@ private:
     std::unique_ptr<ComboBoxAttachment> modeAttachment, blackKeyModeAttachment, minChangeIntervalAttachment;
     std::array<std::unique_ptr<ComboBoxAttachment>, 7> pedalAttachments;
     std::unique_ptr<ButtonAttachment> playabilityAttachment, changesAtRestsOnlyAttachment, avoidRingingAttachment;
-    std::unique_ptr<SliderAttachment> ccBankAttachment, ccChannelAttachment;
+    std::unique_ptr<SliderAttachment> ccBankAttachment, ccChannelAttachment, fieldCcAttachment, fieldChannelAttachment;
     std::unique_ptr<SliderAttachment> ctrlDirectLoAttachment, ctrlDirectHiAttachment, ctrlStepDownAttachment, ctrlStepUpAttachment;
     std::unique_ptr<SliderAttachment> glissCcAttachment, glissLoNoteAttachment, glissHiNoteAttachment;
     std::unique_ptr<SliderAttachment> glissVelCcAttachment, glissVelocityAttachment;

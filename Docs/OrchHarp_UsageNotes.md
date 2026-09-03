@@ -240,6 +240,12 @@ you've dialled in — you set the pedals during the rest, then play.
   number picks a slot across its 0–127 range. `0` disables. This is how MC /
   OrchConductor re-pedals the harp along a piece.
 - **CC Channel** — 0 = listen on any channel.
+- **Pitch-field CC base / ch** (default 0 = off) — point this at **Composer
+  Mastermind's pitch-field broadcast** (MC's default is CC base **110**, channel
+  **1** — the same two CCs OrchNoteFilter reads). OrchHarp reassembles the
+  12-note field and fits the closest pedal diagram to it, so **MC's arc and
+  section content re-pedal the harp automatically**. The governor still paces
+  the moves. The CCs pass through, so a parallel OrchNoteFilter still works.
 - **Ctrl direct-select note range** (default 0–11) — with **Black Keys = Control**,
   a black key in this range selects `slot = note − low`.
 - **Ctrl step down / up note** (default 12 / 13) — one note steps `bankSlot` −1 /
